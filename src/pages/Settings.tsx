@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Key, Save } from 'lucide-react';
+import { Settings as SettingsIcon, Key, Save, FileAudio, MessageSquare } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 interface ApiSettings {
   groqApiKey: string;
   groqApiEndpoint: string;
-  whisperApiKey: string;
+  groqModel: string;
+  whisperModel: string;
   whisperApiEndpoint: string;
 }
 
@@ -17,8 +19,9 @@ const Settings = () => {
   const [settings, setSettings] = useState<ApiSettings>({
     groqApiKey: '',
     groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-    whisperApiKey: '',
-    whisperApiEndpoint: 'https://api.openai.com/v1/audio/transcriptions',
+    groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    whisperModel: 'distil-whisper-large-v3-en',
+    whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
   });
 
   useEffect(() => {
@@ -30,6 +33,10 @@ const Settings = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    setSettings(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
     setSettings(prev => ({ ...prev, [name]: value }));
   };
 
@@ -67,7 +74,7 @@ const Settings = () => {
 
               <div className="space-y-4">
                 <h3 className="text-lg font-medium flex items-center">
-                  <Key className="mr-2 h-5 w-5" /> GROQ LLM
+                  <MessageSquare className="mr-2 h-5 w-5" /> GROQ LLM
                 </h3>
                 
                 <div className="grid grid-cols-1 gap-4">
@@ -83,6 +90,9 @@ const Settings = () => {
                       value={settings.groqApiKey}
                       onChange={handleChange}
                     />
+                    <p className="text-xs text-gray-500">
+                      Ex: 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
+                    </p>
                   </div>
                   
                   <div className="space-y-2">
@@ -97,27 +107,40 @@ const Settings = () => {
                       onChange={handleChange}
                     />
                   </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="groqModel" className="text-sm font-medium">
+                      Modelo LLM
+                    </label>
+                    <Select 
+                      value={settings.groqModel} 
+                      onValueChange={(value) => handleSelectChange('groqModel', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um modelo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout (17B)</SelectItem>
+                        <SelectItem value="mixtra-8x7b">Mixtra (8x7B)</SelectItem>
+                        <SelectItem value="llama3-8b-8192">Llama 3 (8B)</SelectItem>
+                        <SelectItem value="llama3-70b-8192">Llama 3 (70B)</SelectItem>
+                        <SelectItem value="gemma-7b-it">Gemma (7B)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <h3 className="text-lg font-medium flex items-center">
-                  <Key className="mr-2 h-5 w-5" /> Whisper (Transcrição de Áudio)
+                  <FileAudio className="mr-2 h-5 w-5" /> GROQ Whisper (Transcrição de Áudio)
                 </h3>
                 
                 <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-2">
-                    <label htmlFor="whisperApiKey" className="text-sm font-medium">
-                      Chave da API Whisper
-                    </label>
-                    <Input
-                      id="whisperApiKey"
-                      name="whisperApiKey"
-                      type="password"
-                      placeholder="sk_xxxxxxxxxxxxxxxxxxxxxxxx"
-                      value={settings.whisperApiKey}
-                      onChange={handleChange}
-                    />
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      A mesma chave de API GROQ é utilizada para o serviço de transcrição.
+                    </p>
                   </div>
                   
                   <div className="space-y-2">
@@ -127,10 +150,29 @@ const Settings = () => {
                     <Input
                       id="whisperApiEndpoint"
                       name="whisperApiEndpoint"
-                      placeholder="https://api.openai.com/v1/audio/transcriptions"
+                      placeholder="https://api.groq.com/openai/v1/audio/transcriptions"
                       value={settings.whisperApiEndpoint}
                       onChange={handleChange}
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="whisperModel" className="text-sm font-medium">
+                      Modelo de Transcrição
+                    </label>
+                    <Select 
+                      value={settings.whisperModel} 
+                      onValueChange={(value) => handleSelectChange('whisperModel', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um modelo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="distil-whisper-large-v3-en">Distil Whisper Large V3 (EN)</SelectItem>
+                        <SelectItem value="distil-whisper-large-v3">Distil Whisper Large V3 (Multilingual)</SelectItem>
+                        <SelectItem value="whisper-large-v3">Whisper Large V3</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
