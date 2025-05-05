@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Upload, Image as ImageIcon, Search, FaceRecognition, AlertCircle } from 'lucide-react';
+import { Upload, Image as ImageIcon, Search, Scan, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -237,7 +236,7 @@ const ImageAnalysis = () => {
               <Card className="mt-6">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <FaceRecognition className="h-5 w-5" /> Reconhecimento Facial
+                    <Scan className="h-5 w-5" /> Reconhecimento Facial
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
