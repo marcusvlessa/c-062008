@@ -25,14 +25,15 @@ function App() {
     if (!settings.groqApiKey && !localStorage.getItem('securai-api-settings')) {
       // Set default endpoints if not configured
       saveGroqSettings({
-        groqApiKey: '',  // Will need to be set by the user in the Settings page
+        groqApiKey: '',  // Será configurado pelo usuário na página de Configurações
         groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
         groqModel: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-        whisperModel: 'distil-whisper-large-v3-en',
-        whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions'
+        whisperModel: 'distil-whisper-large-v3',  // Versão mais recente do modelo
+        whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
+        language: 'pt'  // Configuração padrão para português
       });
       
-      console.log('Default GROQ API settings initialized');
+      console.log('Configurações padrão da API GROQ inicializadas');
     }
   }, []);
 

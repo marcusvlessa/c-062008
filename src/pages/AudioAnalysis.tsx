@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Upload, AudioWaveform, Mic, FileText, AlertCircle, Database } from 'lucide-react';
+import { Upload, AudioWaveform, Mic, FileText, AlertCircle, Database, Users } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -15,6 +16,12 @@ interface AudioFile {
   url: string;
   file: File;
   transcription?: string;
+  speakerSegments?: {
+    speaker: string;
+    start: number;
+    end: number;
+    text: string;
+  }[];
 }
 
 const AudioAnalysis = () => {
@@ -25,6 +32,7 @@ const AudioAnalysis = () => {
   const [report, setReport] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isCheckingDb, setIsCheckingDb] = useState<boolean>(false);
+  const [showSpeakers, setShowSpeakers] = useState<boolean>(false);
 
   // Check for existing transcriptions in the database when case changes
   useEffect(() => {
@@ -84,14 +92,32 @@ const AudioAnalysis = () => {
         const transcriptions = await getAudioTranscriptionsByCaseId(currentCase.id);
         const existingTranscription = transcriptions.find(t => t.filename === audio.name);
         
-        if (existingTranscription) {
+        if (existingTranscription && existingTranscription.transcription) {
+          // Parse speaker segments if they exist
+          let speakerSegments = [];
+          try {
+            if (existingTranscription.speakerData) {
+              speakerSegments = JSON.parse(existingTranscription.speakerData);
+            }
+          } catch (e) {
+            console.error('Error parsing speaker data:', e);
+          }
+          
           // Use existing transcription from DB
           const updatedAudioFiles = audioFiles.map(a => 
-            a.id === audio.id ? { ...a, transcription: existingTranscription.transcription } : a
+            a.id === audio.id ? { 
+              ...a, 
+              transcription: existingTranscription.transcription,
+              speakerSegments: speakerSegments 
+            } : a
           );
           
           setAudioFiles(updatedAudioFiles);
-          setSelectedAudio({ ...audio, transcription: existingTranscription.transcription });
+          setSelectedAudio({ 
+            ...audio, 
+            transcription: existingTranscription.transcription,
+            speakerSegments: speakerSegments
+          });
           toast.success('Transcrição recuperada do banco de dados');
           setIsTranscribing(false);
           return;
@@ -99,24 +125,25 @@ const AudioAnalysis = () => {
       }
       
       console.log('Transcribing audio file:', audio.name);
-      // Call GROQ Whisper API
-      const transcription = await transcribeAudioWithGroq(audio.file);
-      console.log('Transcription completed successfully');
+      // Call GROQ Whisper API with enhanced speaker detection
+      const { text, speakerSegments } = await transcribeAudioWithGroq(audio.file);
+      console.log('Transcription completed successfully with speakers:', speakerSegments.length);
       
-      // Update the audio file with transcription
+      // Update the audio file with transcription and speaker segments
       const updatedAudioFiles = audioFiles.map(a => 
-        a.id === audio.id ? { ...a, transcription } : a
+        a.id === audio.id ? { ...a, transcription: text, speakerSegments } : a
       );
       
       setAudioFiles(updatedAudioFiles);
-      setSelectedAudio({ ...audio, transcription });
+      setSelectedAudio({ ...audio, transcription: text, speakerSegments });
       
       // Save to database if we have a case
       if (currentCase) {
         await saveAudioTranscription({
           caseId: currentCase.id,
           filename: audio.name,
-          transcription,
+          transcription: text,
+          speakerData: JSON.stringify(speakerSegments),
           dateProcessed: new Date().toISOString()
         });
       }
@@ -146,29 +173,52 @@ const AudioAnalysis = () => {
     setIsGenerating(true);
     
     try {
-      // Use GROQ API to generate report
-      const allTranscriptions = audiosWithTranscription
-        .map(a => `## Arquivo: ${a.name}\n\n${a.transcription}`)
-        .join('\n\n');
+      // Create a more detailed transcript with speaker information for the AI
+      const allTranscriptions = audiosWithTranscription.map(a => {
+        let formattedTranscript = `## Arquivo: ${a.name}\n\n`;
+        
+        if (a.speakerSegments && a.speakerSegments.length > 0) {
+          // Format with speaker information
+          const speakerGroups = a.speakerSegments.reduce((groups, segment) => {
+            const { speaker, text } = segment;
+            if (!groups[speaker]) groups[speaker] = [];
+            groups[speaker].push(text);
+            return groups;
+          }, {} as Record<string, string[]>);
+          
+          formattedTranscript += "### Transcrição por Falante:\n\n";
+          
+          Object.entries(speakerGroups).forEach(([speaker, texts]) => {
+            formattedTranscript += `**${speaker}**: ${texts.join(' ')}\n\n`;
+          });
+        } else {
+          // Use raw transcription if no speaker info
+          formattedTranscript += a.transcription;
+        }
+        
+        return formattedTranscript;
+      }).join('\n\n---\n\n');
       
+      // Use GROQ API to generate report with improved prompt
       const messages = [
         {
           role: "system",
           content: 
             "Você é um assistente especializado em análise de gravações de áudio. " +
-            "Sua função é analisar transcrições de áudios e gerar um relatório detalhado. " +
+            "Sua função é analisar transcrições de áudios e gerar um relatório detalhado em português. " +
             "O relatório deve incluir: 1) Informações gerais; 2) Arquivos analisados; " +
-            "3) Identificação de interlocutores; 4) Transcrição consolidada; " +
+            "3) Identificação dos interlocutores; 4) Transcrição consolidada; " +
             "5) Pontos de interesse; 6) Conclusões e recomendações. " +
-            "Use formato Markdown para estruturar sua resposta."
+            "Utilize formato Markdown para estruturar sua resposta. " +
+            "Analise cuidadosamente o conteúdo buscando pontos-chave relevantes para o contexto investigativo."
         },
         {
           role: "user",
-          content: `Caso: ${currentCase.title}\n\nAnalise as seguintes transcrições de áudio e gere um relatório detalhado:\n\n${allTranscriptions}`
+          content: `Caso: ${currentCase.title}\n\nAnalise as seguintes transcrições de áudio e gere um relatório detalhado em português:\n\n${allTranscriptions}`
         }
       ];
       
-      console.log('Generating report based on audio transcriptions');
+      console.log('Generating report based on audio transcriptions with speaker data');
       const generatedReport = await makeGroqAIRequest(messages, 2048);
       setReport(generatedReport);
       
@@ -208,6 +258,32 @@ const AudioAnalysis = () => {
     }, 'audioAnalysis');
     
     toast.success('Análise de áudio salva com sucesso no caso atual');
+  };
+
+  // Render transcription with speaker segments
+  const renderTranscriptionWithSpeakers = () => {
+    if (!selectedAudio?.speakerSegments || selectedAudio.speakerSegments.length === 0) {
+      return (
+        <pre className="whitespace-pre-wrap text-sm">{selectedAudio?.transcription}</pre>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {selectedAudio.speakerSegments.map((segment, idx) => (
+          <div key={idx} className="flex gap-4">
+            <div className="w-24 flex-shrink-0">
+              <div className="bg-blue-100 dark:bg-blue-900 rounded-md p-2 text-blue-800 dark:text-blue-200 text-sm font-medium">
+                {segment.speaker}
+              </div>
+            </div>
+            <div className="flex-1 bg-gray-50 dark:bg-gray-900 p-3 rounded-md">
+              {segment.text}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -274,7 +350,9 @@ const AudioAnalysis = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle>Áudios</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <AudioWaveform className="h-5 w-5" /> Áudios
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {audioFiles.length === 0 ? (
@@ -295,11 +373,19 @@ const AudioAnalysis = () => {
                       >
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-medium truncate">{audio.name}</h4>
-                          {audio.transcription && (
-                            <span className="px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full">
-                              Transcrito
-                            </span>
-                          )}
+                          <div className="flex gap-1">
+                            {audio.speakerSegments && audio.speakerSegments.length > 0 && (
+                              <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full flex items-center gap-1">
+                                <Users size={12} />
+                                {new Set(audio.speakerSegments.map(s => s.speaker)).size} falantes
+                              </span>
+                            )}
+                            {audio.transcription && (
+                              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full">
+                                Transcrito
+                              </span>
+                            )}
+                          </div>
                         </div>
                         
                         <audio src={audio.url} controls className="w-full h-8 mb-3" />
@@ -334,7 +420,20 @@ const AudioAnalysis = () => {
             <Card className="h-full flex flex-col">
               <CardHeader>
                 <CardTitle className="flex justify-between items-center">
-                  <span>{selectedAudio ? 'Transcrição' : 'Relatório de Áudio'}</span>
+                  <span>
+                    {selectedAudio ? 'Transcrição' : 'Relatório de Áudio'}
+                    {selectedAudio && selectedAudio.speakerSegments && selectedAudio.speakerSegments.length > 0 && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="ml-2"
+                        onClick={() => setShowSpeakers(!showSpeakers)}
+                      >
+                        <Users size={16} className="mr-1" />
+                        {showSpeakers ? 'Ocultar falantes' : 'Mostrar falantes'}
+                      </Button>
+                    )}
+                  </span>
                   {report && !selectedAudio && (
                     <Button variant="outline" size="sm" onClick={saveToCase}>
                       Salvar no Caso
@@ -360,7 +459,10 @@ const AudioAnalysis = () => {
                 ) : selectedAudio && selectedAudio.transcription ? (
                   <div className="h-full flex flex-col">
                     <div className="bg-gray-50 dark:bg-gray-900 rounded p-4 flex-1 overflow-auto">
-                      <pre className="whitespace-pre-wrap text-sm">{selectedAudio.transcription}</pre>
+                      {showSpeakers && selectedAudio.speakerSegments ? 
+                        renderTranscriptionWithSpeakers() : 
+                        <pre className="whitespace-pre-wrap text-sm">{selectedAudio.transcription}</pre>
+                      }
                     </div>
                     <div className="flex justify-end mt-4">
                       <Button 

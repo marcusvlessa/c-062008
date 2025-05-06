@@ -26,6 +26,7 @@ interface SecurAIDB extends DBSchema {
       caseId: string;
       filename: string;
       transcription: string;
+      speakerData?: string; // JSON string of speaker segments
       dateProcessed: string;
     };
     indexes: { 'by-case': string };
@@ -150,29 +151,93 @@ export const getImageAnalysesByCaseId = async (caseId: string) => {
   }
 };
 
-// Parse PDF to text (simplified mock implementation for browser)
+// Parse PDF to text (enhanced with more realistic extraction)
 export const parsePdfToText = async (pdfFile: File): Promise<string> => {
   // In a real implementation, we would use a library like pdf.js to extract text
-  // This is a simplified mock function
+  // This is an enhanced mock function
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => {
-      // Mock extracted content with filename and basic info
-      const mockContent = 
-        `BOLETIM DE OCORRÊNCIA\n` +
-        `Arquivo: ${pdfFile.name}\n` +
-        `Tamanho: ${(pdfFile.size / 1024).toFixed(2)} KB\n` +
-        `Data: 06/05/2025\n\n` +
-        `DESCRIÇÃO DA OCORRÊNCIA\n` +
-        `Este é um texto extraído de um arquivo PDF com informações sobre uma ocorrência policial.\n` +
-        `Envolve suspeita de furto na região central da cidade. Testemunhas relataram ter visto\n` +
-        `um indivíduo de aproximadamente 30 anos, 1,75m, vestindo jaqueta preta.\n\n` +
-        `PARTES ENVOLVIDAS\n` +
-        `- João da Silva (vítima)\n` +
-        `- Maria Oliveira (testemunha)\n\n` +
-        `OBJETOS SUBTRAÍDOS\n` +
-        `- Celular modelo iPhone 13\n` +
-        `- Carteira com documentos`;
+      // Create more realistic content based on filename
+      const fileName = pdfFile.name.toLowerCase();
+      let mockContent = '';
+      
+      // Different mock content based on filename patterns
+      if (fileName.includes('bo') || fileName.includes('ocorrencia') || fileName.includes('policia')) {
+        mockContent = 
+          `BOLETIM DE OCORRÊNCIA Nº ${Math.floor(Math.random() * 1000) + 1000}/2025\n` +
+          `Delegacia: ${Math.floor(Math.random() * 100)}ª DP - São Paulo\n` +
+          `Data do Registro: ${new Date().toLocaleDateString('pt-BR')}\n` +
+          `Data do Fato: ${new Date(Date.now() - Math.random() * 10 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')}\n\n` +
+          `NATUREZA DA OCORRÊNCIA: Furto Qualificado (Art. 155, §4º, CP)\n\n` +
+          `VÍTIMA:\n` +
+          `Nome: Carlos Roberto da Silva\n` +
+          `RG: 25.654.789-X SSP/SP\n` +
+          `CPF: 123.456.789-00\n` +
+          `Data de Nascimento: 15/03/1985\n` +
+          `Endereço: Rua das Palmeiras, 123 - Jardim Europa - São Paulo/SP\n` +
+          `Telefone: (11) 98765-4321\n\n` +
+          `FATOS:\n` +
+          `A vítima relatou que no dia da ocorrência, por volta das 14h30, teve seu veículo Toyota Corolla, cor prata, placa ABC-1234, ano 2022, arrombado enquanto estava estacionado na Av. Paulista, próximo ao número 1000. Foram subtraídos do interior do veículo um notebook marca Dell, modelo Inspiron, uma maleta com documentos pessoais e profissionais, e um telefone celular iPhone 13. A vítima afirma que estacionou o veículo às 13h15 e ao retornar às 14h30 constatou o crime. Câmeras de segurança de um estabelecimento comercial próximo podem ter registrado a ação.\n\n` +
+          `TESTEMUNHAS:\n` +
+          `1. Maria Oliveira - Comerciante local, presenciou um indivíduo suspeito próximo ao veículo.\n` +
+          `2. João Pereira - Segurança do edifício em frente, informou que as câmeras de segurança podem ter captado imagens do ocorrido.\n\n` +
+          `DILIGÊNCIAS SOLICITADAS:\n` +
+          `- Requisição das imagens de câmeras de segurança\n` +
+          `- Verificação de impressões digitais no veículo\n` +
+          `- Averiguação de ocorrências similares na região\n\n` +
+          `OBSERVAÇÕES ADICIONAIS:\n` +
+          `Veículo modelo Toyota Corolla, cor prata, placa ABC-1234, ano 2022\n` +
+          `Segundo a vítima, houve ocorrências semelhantes na região nas últimas semanas.\n` +
+          `Foi informado que um suspeito foi visto no local: homem, aproximadamente 30 anos, 1,75m, vestindo jaqueta preta e boné.`;
+      } else if (fileName.includes('laudo') || fileName.includes('pericia')) {
+        mockContent = 
+          `LAUDO DE EXAME PERICIAL Nº ${Math.floor(Math.random() * 1000) + 1000}/2025\n` +
+          `Instituto de Criminalística - São Paulo\n` +
+          `Data: ${new Date().toLocaleDateString('pt-BR')}\n\n` +
+          `SOLICITANTE: Delegacia de Polícia Civil - ${Math.floor(Math.random() * 100)}ª DP\n\n` +
+          `OBJETO DO EXAME:\n` +
+          `Veículo Toyota Corolla, cor prata, placa ABC-1234, ano 2022, chassi 9BRBL09F2P0123456\n\n` +
+          `DESCRIÇÃO DO LOCAL:\n` +
+          `O veículo foi encontrado estacionado na Av. Paulista, 1000, São Paulo/SP, apresentando sinais de arrombamento na porta do lado do motorista. O vidro traseiro esquerdo estava quebrado e havia sinais de violação no painel central.\n\n` +
+          `EXAME REALIZADO:\n` +
+          `Foi realizado exame minucioso no veículo, com coleta de impressões digitais e vestígios biológicos. Foram encontradas marcas de ferramentas usadas para arrombamento na fechadura da porta do motorista, compatíveis com chave de fenda modificada.\n\n` +
+          `MATERIAL COLETADO:\n` +
+          `- Impressões digitais na maçaneta e vidro do veículo\n` +
+          `- Fibras encontradas no assento do motorista\n` +
+          `- Amostra de substância desconhecida no console central\n\n` +
+          `RESULTADOS:\n` +
+          `1. As impressões digitais coletadas foram encaminhadas para análise comparativa no sistema AFIS.\n` +
+          `2. As fibras encontradas são compatíveis com tecido sintético de cor preta, possivelmente proveniente de luvas ou vestimentas.\n` +
+          `3. A substância desconhecida foi identificada como resíduo de cola utilizada em dispositivos "chupa-cabra" para clonagem de cartões.\n\n` +
+          `CONCLUSÃO:\n` +
+          `O veículo apresenta sinais evidentes de arrombamento realizado por pessoa com conhecimento técnico em sistemas de travamento automotivo. A presença de resíduos de cola sugere possível tentativa de instalação de dispositivo para clonagem de cartões, indicando grupo criminoso especializado em furtos e fraudes.\n\n` +
+          `OBSERVAÇÕES ADICIONAIS:\n` +
+          `O padrão de arrombamento é semelhante a outros 3 casos registrados na mesma região nos últimos 30 dias, sugerindo atuação do mesmo grupo criminoso.`;
+      } else {
+        mockContent = 
+          `BOLETIM DE OCORRÊNCIA\n` +
+          `Arquivo: ${pdfFile.name}\n` +
+          `Tamanho: ${(pdfFile.size / 1024).toFixed(2)} KB\n` +
+          `Data: 06/05/2025\n\n` +
+          `DESCRIÇÃO DA OCORRÊNCIA\n` +
+          `Este é um texto extraído de um arquivo PDF com informações sobre uma ocorrência policial.\n` +
+          `Envolve suspeita de furto na região central da cidade. Testemunhas relataram ter visto\n` +
+          `um indivíduo de aproximadamente 30 anos, 1,75m, vestindo jaqueta preta.\n\n` +
+          `PARTES ENVOLVIDAS\n` +
+          `- João da Silva (vítima)\n` +
+          `- Maria Oliveira (testemunha)\n\n` +
+          `OBJETOS SUBTRAÍDOS\n` +
+          `- Celular modelo iPhone 13\n` +
+          `- Carteira com documentos\n` +
+          `- Notebook HP EliteBook\n` +
+          `- Relógio marca Citizen\n\n` +
+          `VEÍCULO RELACIONADO\n` +
+          `Placa: XYZ-5678\n` +
+          `Modelo: Honda Civic\n` +
+          `Ano: 2023\n` +
+          `Cor: Preto`;
+      }
         
       resolve(mockContent);
     };
@@ -186,9 +251,12 @@ export const convertTextToCSV = (text: string): string => {
   const lines = text.split('\n').filter(line => line.trim());
   let csv = '';
   
-  lines.forEach(line => {
+  lines.forEach((line, index) => {
     // Replace multiple spaces with a single space
     const cleanLine = line.replace(/\s+/g, ' ').trim();
+    // Add row number for reference
+    csv += `${index+1},`;
+    
     // Split by common separators like ":" or "-" if they exist
     if (cleanLine.includes(':')) {
       const [key, value] = cleanLine.split(':', 2);

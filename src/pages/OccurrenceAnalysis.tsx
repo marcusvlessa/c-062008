@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Check, AlertCircle, Database, Search } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -21,6 +22,7 @@ const OccurrenceAnalysis = () => {
   const [analysis, setAnalysis] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isCheckingDb, setIsCheckingDb] = useState<boolean>(false);
+  const documentRef = useRef<HTMLDivElement>(null);
 
   // Check for existing analysis in the database when case changes
   useEffect(() => {
@@ -49,8 +51,8 @@ const OccurrenceAnalysis = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files && e.target.files[0];
     if (selectedFile) {
-      if (!['application/pdf', 'text/html'].includes(selectedFile.type)) {
-        toast.error('Por favor, selecione um arquivo PDF ou HTML');
+      if (!['application/pdf', 'text/html', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(selectedFile.type)) {
+        toast.error('Por favor, selecione um arquivo PDF, HTML, TXT ou DOCX');
         return;
       }
       
@@ -60,6 +62,11 @@ const OccurrenceAnalysis = () => {
         const extractedText = await parsePdfToText(selectedFile);
         setFileContent(extractedText);
         toast.success(`Conteúdo extraído de: ${selectedFile.name}`);
+        
+        // Scroll to content
+        setTimeout(() => {
+          documentRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
       } catch (error) {
         console.error('Error parsing file:', error);
         toast.error('Erro ao processar o arquivo');
@@ -96,7 +103,7 @@ const OccurrenceAnalysis = () => {
       // Convert content to CSV for storage
       const csvContent = convertTextToCSV(fileContent);
       
-      // Define GROQ API messages for analysis
+      // Define GROQ API messages for analysis with improved prompt
       const messages = [
         {
           role: "system",
@@ -106,11 +113,13 @@ const OccurrenceAnalysis = () => {
             "estruturado com: 1) Resumo do Incidente; 2) Dados da Vítima; 3) Dados do Suspeito; " +
             "4) Descrição Detalhada dos Fatos; 5) Sugestões para Investigação; 6) Despacho Sugerido. " +
             "7) Pontos de Atenção; 8) Detecção de possíveis contradições/inconsistências. " +
-            "9) Classificação penal sugerida. Use formato Markdown para estruturar sua resposta."
+            "9) Classificação penal sugerida. Use formato Markdown para estruturar sua resposta. " +
+            "É fundamental criar um relatório detalhado, extraindo todas as informações úteis do documento " +
+            "e evitando respostas genéricas. Foque em aspectos específicos do caso analisado."
         },
         {
           role: "user",
-          content: `Analise o seguinte conteúdo extraído de um boletim de ocorrência:\n\n${fileContent}\n\nGere um relatório de análise completo e detalhado.`
+          content: `Analise o seguinte conteúdo extraído de um boletim de ocorrência:\n\n${fileContent}\n\nGere um relatório de análise completo, detalhado e específico para este caso.`
         }
       ];
       
@@ -218,7 +227,7 @@ const OccurrenceAnalysis = () => {
                       type="file"
                       id="file-upload"
                       className="hidden"
-                      accept=".pdf,.html"
+                      accept=".pdf,.html,.txt,.docx"
                       onChange={handleFileChange}
                     />
                     <label 
@@ -227,7 +236,7 @@ const OccurrenceAnalysis = () => {
                     >
                       <FileText className="h-10 w-10 text-gray-400 mb-2" />
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Arraste um arquivo PDF ou HTML aqui ou clique para fazer upload
+                        Arraste um arquivo PDF, HTML, TXT ou DOCX aqui ou clique para fazer upload
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                         Tamanho máximo: 10MB
@@ -256,7 +265,7 @@ const OccurrenceAnalysis = () => {
             </Card>
 
             {fileContent && (
-              <Card>
+              <Card ref={documentRef}>
                 <CardHeader>
                   <CardTitle>Conteúdo do Documento</CardTitle>
                 </CardHeader>
@@ -290,11 +299,13 @@ const OccurrenceAnalysis = () => {
                     </p>
                   </div>
                 ) : analysis ? (
-                  <Textarea
-                    className="min-h-[400px] font-mono"
-                    value={analysis}
-                    onChange={(e) => setAnalysis(e.target.value)}
-                  />
+                  <div className="prose dark:prose-invert max-w-none">
+                    <Textarea
+                      className="min-h-[400px] font-mono"
+                      value={analysis}
+                      onChange={(e) => setAnalysis(e.target.value)}
+                    />
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center p-8 text-gray-500 dark:text-gray-400">
                     <FileText className="h-16 w-16 opacity-20 mb-4" />

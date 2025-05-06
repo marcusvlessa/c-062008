@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, Image as ImageIcon, Search, Scan, AlertCircle, Database } from 'lucide-react';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Upload, Image as ImageIcon, Search, Scan, AlertCircle, Database, Maximize2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -32,6 +33,8 @@ const ImageAnalysis = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>('original');
   const [isCheckingDb, setIsCheckingDb] = useState<boolean>(false);
+  const [showFaceBox, setShowFaceBox] = useState<boolean>(true);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
 
   // Check for existing analyses in the database when case changes
   useEffect(() => {
@@ -111,6 +114,7 @@ const ImageAnalysis = () => {
         };
         
         setImage(processedImage);
+        setActiveTab('enhanced');
         toast.success('Análise recuperada do banco de dados');
         setIsProcessing(false);
         return;
@@ -132,6 +136,7 @@ const ImageAnalysis = () => {
       };
       
       setImage(processedImage);
+      setActiveTab('enhanced'); // Switch to enhanced tab automatically
       
       // Save to database
       await saveImageAnalysis({
@@ -165,27 +170,53 @@ const ImageAnalysis = () => {
     }
   };
 
+  // Function to calibrate face box positions based on current image display size
+  const calibrateFaceBoxPositions = (face: any, imgElement: HTMLImageElement | null) => {
+    if (!imgElement || !imageContainerRef.current) return face.region;
+    
+    const containerRect = imageContainerRef.current.getBoundingClientRect();
+    const imgRect = imgElement.getBoundingClientRect();
+    
+    // Calculate scaling factors
+    const scaleX = imgRect.width / imgElement.naturalWidth;
+    const scaleY = imgRect.height / imgElement.naturalHeight;
+    
+    // Return adjusted coordinates
+    return {
+      x: face.region.x * scaleX,
+      y: face.region.y * scaleY,
+      width: face.region.width * scaleX,
+      height: face.region.height * scaleY
+    };
+  };
+
   const renderFaceBoxes = () => {
-    if (!image?.faces || !image.faces.length) return null;
+    if (!image?.faces || !image.faces.length || !showFaceBox) return null;
+    
+    const imgElement = imageContainerRef.current?.querySelector('img');
     
     return (
-      <div className="absolute inset-0">
-        {image.faces.map((face) => (
-          <div
-            key={face.id}
-            className="absolute border-2 border-red-500"
-            style={{
-              left: `${face.region.x}px`,
-              top: `${face.region.y}px`,
-              width: `${face.region.width}px`,
-              height: `${face.region.height}px`
-            }}
-          >
-            <div className="absolute -top-6 left-0 bg-red-500 text-white px-2 py-0.5 text-xs">
-              Face {face.id} ({(face.confidence * 100).toFixed(1)}%)
+      <div className="absolute inset-0 pointer-events-none">
+        {image.faces.map((face) => {
+          const adjustedRegion = calibrateFaceBoxPositions(face, imgElement as HTMLImageElement);
+          
+          return (
+            <div
+              key={face.id}
+              className="absolute border-2 border-red-500"
+              style={{
+                left: `${adjustedRegion.x}px`,
+                top: `${adjustedRegion.y}px`,
+                width: `${adjustedRegion.width}px`,
+                height: `${adjustedRegion.height}px`
+              }}
+            >
+              <div className="absolute -top-6 left-0 bg-red-500 text-white px-2 py-0.5 text-xs">
+                Face {face.id} ({(face.confidence * 100).toFixed(1)}%)
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -309,7 +340,16 @@ const ImageAnalysis = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <h4 className="font-medium">Faces Detectadas: {image.faces.length}</h4>
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">Faces Detectadas: {image.faces.length}</h4>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => setShowFaceBox(!showFaceBox)}
+                      >
+                        {showFaceBox ? 'Ocultar Marcações' : 'Mostrar Marcações'}
+                      </Button>
+                    </div>
                     <div className="grid grid-cols-3 gap-2">
                       {image.faces.map((face) => (
                         <div 
@@ -332,7 +372,20 @@ const ImageAnalysis = () => {
           <div>
             <Card className="h-full">
               <CardHeader>
-                <CardTitle>Visualização da Imagem</CardTitle>
+                <CardTitle className="flex justify-between items-center">
+                  <span>Visualização da Imagem</span>
+                  {image && image.enhanced && (
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      className="flex items-center gap-1"
+                      onClick={() => window.open(activeTab === 'original' ? image.original : image.enhanced, '_blank')}
+                    >
+                      <Maximize2 size={16} />
+                      <span>Ampliar</span>
+                    </Button>
+                  )}
+                </CardTitle>
                 {image && image.enhanced && (
                   <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList className="grid w-full grid-cols-2">
@@ -351,7 +404,7 @@ const ImageAnalysis = () => {
                     </p>
                   </div>
                 ) : image ? (
-                  <div className="bg-gray-50 dark:bg-gray-900 p-1 rounded-md relative">
+                  <div className="bg-gray-50 dark:bg-gray-900 p-1 rounded-md relative" ref={imageContainerRef}>
                     <img 
                       src={activeTab === 'original' ? image.original : (image.enhanced || image.original)} 
                       alt="Imagem carregada" 
