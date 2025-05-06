@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Database, Link as LinkIcon, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -7,11 +7,38 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
 
+interface NetworkNode {
+  id: string;
+  label: string;
+  group: string;
+  size: number;
+}
+
+interface NetworkLink {
+  source: string;
+  target: string;
+  value: number;
+  type: string;
+}
+
+interface NetworkData {
+  nodes: NetworkNode[];
+  links: NetworkLink[];
+}
+
 const LinkAnalysis = () => {
   const { currentCase, saveToCurrentCase } = useCase();
   const [file, setFile] = useState<File | null>(null);
   const [graphImage, setGraphImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [networkData, setNetworkData] = useState<NetworkData | null>(null);
+  const [canvasRef, setCanvasRef] = useState<HTMLCanvasElement | null>(null);
+  
+  useEffect(() => {
+    if (networkData && canvasRef) {
+      drawNetworkGraph(networkData, canvasRef);
+    }
+  }, [networkData, canvasRef]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -42,21 +69,204 @@ const LinkAnalysis = () => {
     
     setIsProcessing(true);
     
-    // Use a placeholder visualization image for demo
+    // In a real implementation, we would parse the CSV/Excel file
+    // For now, we'll generate mock network data
     setTimeout(() => {
-      // In a real implementation, this would generate a network graph based on the data
-      setGraphImage('/lovable-uploads/0c6db754-b805-46e5-a4b8-319a9d8fef71.png'); // Using the uploaded placeholder image
+      // Generate mock network data
+      const mockNetworkData: NetworkData = {
+        nodes: [
+          { id: "1", label: "João Silva", group: "suspect", size: 10 },
+          { id: "2", label: "Ana Souza", group: "victim", size: 8 },
+          { id: "3", label: "Carlos Pereira", group: "suspect", size: 12 },
+          { id: "4", label: "Empresa ABC", group: "location", size: 15 },
+          { id: "5", label: "Maria Oliveira", group: "witness", size: 7 },
+          { id: "6", label: "Pedro Santos", group: "witness", size: 7 },
+          { id: "7", label: "Banco XYZ", group: "location", size: 14 },
+          { id: "8", label: "Roberto Alves", group: "suspect", size: 9 },
+          { id: "9", label: "Telefone +5511999999999", group: "evidence", size: 6 },
+          { id: "10", label: "Telefone +5511888888888", group: "evidence", size: 6 },
+          { id: "11", label: "Carro Placa ABC-1234", group: "evidence", size: 8 },
+          { id: "12", label: "Endereço: Av. Principal, 123", group: "location", size: 10 }
+        ],
+        links: [
+          { source: "1", target: "3", value: 5, type: "associate" },
+          { source: "1", target: "9", value: 8, type: "owns" },
+          { source: "1", target: "11", value: 7, type: "owns" },
+          { source: "1", target: "4", value: 9, type: "works_at" },
+          { source: "2", target: "7", value: 6, type: "client" },
+          { source: "3", target: "10", value: 8, type: "owns" },
+          { source: "3", target: "12", value: 10, type: "lives_at" },
+          { source: "3", target: "8", value: 4, type: "associate" },
+          { source: "4", target: "7", value: 12, type: "transaction" },
+          { source: "5", target: "2", value: 3, type: "knows" },
+          { source: "6", target: "2", value: 3, type: "knows" },
+          { source: "6", target: "5", value: 2, type: "knows" },
+          { source: "8", target: "12", value: 7, type: "visits" }
+        ]
+      };
+
+      setNetworkData(mockNetworkData);
+      
+      // Generate a static image for visualization
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 600;
+      setCanvasRef(canvas);
+      
+      drawNetworkGraph(mockNetworkData, canvas);
+      
+      // Convert canvas to data URL for display
+      const dataUrl = canvas.toDataURL('image/png');
+      setGraphImage(dataUrl);
+      
       setIsProcessing(false);
       
       // Save to case
       saveToCurrentCase({
         timestamp: new Date().toISOString(),
         filename: file.name,
-        graphImageUrl: '/lovable-uploads/0c6db754-b805-46e5-a4b8-319a9d8fef71.png'
+        graphImageUrl: dataUrl
       }, 'linkAnalysis');
       
       toast.success('Análise de vínculos processada com sucesso');
     }, 3000);
+  };
+
+  const drawNetworkGraph = (data: NetworkData, canvas: HTMLCanvasElement) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#f8fafc'; // Light background
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw title
+    ctx.font = 'bold 20px Arial';
+    ctx.fillStyle = '#1e293b';
+    ctx.textAlign = 'center';
+    ctx.fillText('Análise de Vínculos', canvas.width/2, 30);
+    
+    // Set up graph parameters
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.min(canvas.width, canvas.height) / 3;
+    
+    // Create positions for nodes in a circle layout
+    const nodePositions: {[key: string]: {x: number, y: number}} = {};
+    data.nodes.forEach((node, i) => {
+      const angle = (i / data.nodes.length) * 2 * Math.PI;
+      const x = centerX + radius * Math.cos(angle);
+      const y = centerY + radius * Math.sin(angle);
+      nodePositions[node.id] = { x, y };
+    });
+    
+    // Draw links
+    ctx.lineWidth = 1;
+    data.links.forEach(link => {
+      const sourcePos = nodePositions[link.source];
+      const targetPos = nodePositions[link.target];
+      
+      // Determine link color based on type
+      switch (link.type) {
+        case 'associate':
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)'; // Red
+          break;
+        case 'owns':
+          ctx.strokeStyle = 'rgba(59, 130, 246, 0.6)'; // Blue
+          break;
+        case 'works_at':
+        case 'lives_at':
+        case 'visits':
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)'; // Green
+          break;
+        case 'knows':
+          ctx.strokeStyle = 'rgba(217, 119, 6, 0.6)'; // Yellow
+          break;
+        case 'client':
+        case 'transaction':
+          ctx.strokeStyle = 'rgba(139, 92, 246, 0.6)'; // Purple
+          break;
+        default:
+          ctx.strokeStyle = 'rgba(75, 85, 99, 0.6)'; // Gray
+      }
+      
+      // Draw line with width based on value
+      ctx.lineWidth = Math.max(1, Math.min(5, link.value / 3));
+      ctx.beginPath();
+      ctx.moveTo(sourcePos.x, sourcePos.y);
+      ctx.lineTo(targetPos.x, targetPos.y);
+      ctx.stroke();
+      
+      // Draw link label
+      ctx.font = '9px Arial';
+      ctx.fillStyle = '#64748b';
+      const midX = (sourcePos.x + targetPos.x) / 2;
+      const midY = (sourcePos.y + targetPos.y) / 2;
+      ctx.fillText(link.type, midX, midY);
+    });
+    
+    // Draw nodes
+    data.nodes.forEach(node => {
+      const pos = nodePositions[node.id];
+      
+      // Determine node color based on group
+      switch (node.group) {
+        case 'suspect':
+          ctx.fillStyle = '#ef4444'; // Red
+          break;
+        case 'victim':
+          ctx.fillStyle = '#3b82f6'; // Blue
+          break;
+        case 'witness':
+          ctx.fillStyle = '#10b981'; // Green
+          break;
+        case 'location':
+          ctx.fillStyle = '#f59e0b'; // Yellow
+          break;
+        case 'evidence':
+          ctx.fillStyle = '#8b5cf6'; // Purple
+          break;
+        default:
+          ctx.fillStyle = '#64748b'; // Gray
+      }
+      
+      // Draw node
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, Math.max(5, Math.min(15, node.size)), 0, 2 * Math.PI);
+      ctx.fill();
+      
+      // Draw node label
+      ctx.font = 'bold 10px Arial';
+      ctx.fillStyle = '#1e293b';
+      ctx.textAlign = 'center';
+      ctx.fillText(node.label, pos.x, pos.y + node.size + 10);
+    });
+    
+    // Draw legend
+    const legendX = 20;
+    let legendY = 60;
+    const types = ['suspect', 'victim', 'witness', 'location', 'evidence'];
+    const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
+    const legends = ['Suspeito', 'Vítima', 'Testemunha', 'Local', 'Evidência'];
+    
+    ctx.font = 'bold 12px Arial';
+    ctx.fillStyle = '#1e293b';
+    ctx.textAlign = 'left';
+    ctx.fillText('Legenda:', legendX, legendY - 20);
+    
+    types.forEach((type, i) => {
+      ctx.fillStyle = colors[i];
+      ctx.beginPath();
+      ctx.arc(legendX + 7, legendY, 7, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      ctx.fillStyle = '#1e293b';
+      ctx.font = '11px Arial';
+      ctx.fillText(legends[i], legendX + 20, legendY + 4);
+      
+      legendY += 20;
+    });
   };
 
   return (
@@ -112,7 +322,7 @@ const LinkAnalysis = () => {
                         Arraste um arquivo CSV, XLS ou XLSX aqui ou clique para fazer upload
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                        O arquivo deve conter dados relacionados para análise de vínculos
+                        O arquivo deve conter dados relacionais para análise de vínculos
                       </p>
                     </label>
                   </div>
@@ -207,13 +417,25 @@ const LinkAnalysis = () => {
                       <div>
                         <h4 className="text-sm font-medium">Estatísticas dos Vínculos</h4>
                         <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-2">
-                          <p className="text-xs">Entidades: <span className="font-semibold">24</span></p>
-                          <p className="text-xs">Conexões: <span className="font-semibold">37</span></p>
-                          <p className="text-xs">Grau Médio: <span className="font-semibold">3.1</span></p>
-                          <p className="text-xs">Centralidade: <span className="font-semibold">0.42</span></p>
+                          <p className="text-xs">Entidades: <span className="font-semibold">12</span></p>
+                          <p className="text-xs">Conexões: <span className="font-semibold">13</span></p>
+                          <p className="text-xs">Grau Médio: <span className="font-semibold">2.2</span></p>
+                          <p className="text-xs">Centralidade: <span className="font-semibold">0.38</span></p>
                         </div>
                       </div>
-                      <Button size="sm">Salvar Imagem</Button>
+                      <Button 
+                        size="sm"
+                        onClick={() => {
+                          if (graphImage) {
+                            const link = document.createElement('a');
+                            link.download = 'analise-vinculos.png';
+                            link.href = graphImage;
+                            link.click();
+                          }
+                        }}
+                      >
+                        Salvar Imagem
+                      </Button>
                     </div>
                   </div>
                 ) : (

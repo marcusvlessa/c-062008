@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Check, AlertCircle, Database, Search } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -94,25 +93,31 @@ const OccurrenceAnalysis = () => {
         return;
       }
       
-      // If no existing analysis, call GROQ API
+      // Convert content to CSV for storage
       const csvContent = convertTextToCSV(fileContent);
       
+      // Define GROQ API messages for analysis
       const messages = [
         {
           role: "system",
           content: 
             "Você é um assistente especializado em análise de boletins de ocorrência policiais. " +
             "Sua função é analisar o conteúdo extraído de documentos de ocorrência e gerar um relatório " +
-            "estruturado com: 1) Resumo do Incidente; 2) Sugestões para Investigação; 3) Despacho Sugerido. " +
-            "Use formato Markdown para estruturar sua resposta."
+            "estruturado com: 1) Resumo do Incidente; 2) Dados da Vítima; 3) Dados do Suspeito; " +
+            "4) Descrição Detalhada dos Fatos; 5) Sugestões para Investigação; 6) Despacho Sugerido. " +
+            "7) Pontos de Atenção; 8) Detecção de possíveis contradições/inconsistências. " +
+            "9) Classificação penal sugerida. Use formato Markdown para estruturar sua resposta."
         },
         {
           role: "user",
-          content: `Analise o seguinte conteúdo extraído de um boletim de ocorrência:\n\n${fileContent}\n\nGere um relatório de análise.`
+          content: `Analise o seguinte conteúdo extraído de um boletim de ocorrência:\n\n${fileContent}\n\nGere um relatório de análise completo e detalhado.`
         }
       ];
       
-      const aiAnalysis = await makeGroqAIRequest(messages);
+      console.log('Analyzing occurrence document with GROQ API');
+      const aiAnalysis = await makeGroqAIRequest(messages, 2048);
+      console.log('Analysis completed successfully');
+      
       setAnalysis(aiAnalysis);
       
       // Save to database

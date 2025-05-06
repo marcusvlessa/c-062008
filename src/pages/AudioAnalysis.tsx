@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Upload, AudioWaveform, Mic, FileText, AlertCircle, Database } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -99,8 +98,10 @@ const AudioAnalysis = () => {
         }
       }
       
-      // If no existing transcription, call GROQ Whisper API
+      console.log('Transcribing audio file:', audio.name);
+      // Call GROQ Whisper API
       const transcription = await transcribeAudioWithGroq(audio.file);
+      console.log('Transcription completed successfully');
       
       // Update the audio file with transcription
       const updatedAudioFiles = audioFiles.map(a => 
@@ -167,6 +168,7 @@ const AudioAnalysis = () => {
         }
       ];
       
+      console.log('Generating report based on audio transcriptions');
       const generatedReport = await makeGroqAIRequest(messages, 2048);
       setReport(generatedReport);
       

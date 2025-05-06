@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from './components/ui/sonner';
 import SideNavigation from './components/SideNavigation';
@@ -13,9 +13,29 @@ import CaseManagement from './pages/CaseManagement';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 import { CaseProvider } from './contexts/CaseContext';
+import { getGroqSettings, saveGroqSettings } from './services/groqService';
 import './index.css';
 
 function App() {
+  // Initialize default API settings if not already set
+  useEffect(() => {
+    const settings = getGroqSettings();
+    
+    // Check if API key is already set
+    if (!settings.groqApiKey && !localStorage.getItem('securai-api-settings')) {
+      // Set default endpoints if not configured
+      saveGroqSettings({
+        groqApiKey: '',  // Will need to be set by the user in the Settings page
+        groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
+        groqModel: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+        whisperModel: 'distil-whisper-large-v3-en',
+        whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions'
+      });
+      
+      console.log('Default GROQ API settings initialized');
+    }
+  }, []);
+
   return (
     <CaseProvider>
       <div className="flex h-screen bg-gray-100 dark:bg-gray-950">

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Upload, Image as ImageIcon, Search, Scan, AlertCircle, Database } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -7,7 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
-import { makeGroqAIRequest } from '../services/groqService';
+import { 
+  analyzeImageWithGroq, 
+  enhanceImageWithGroq
+} from '../services/groqService';
 import { saveImageAnalysis, getImageAnalysesByCaseId } from '../services/databaseService';
 
 interface ProcessedImage {
@@ -114,51 +116,19 @@ const ImageAnalysis = () => {
         return;
       }
       
-      // Use GROQ API to generate OCR text
-      const messages = [
-        {
-          role: "system",
-          content: 
-            "Você é um assistente especializado em análise de imagens. " +
-            "Examine a imagem e extraia todo o texto visível nela. " +
-            "Se houver placas de veículos, destaque-as em uma seção separada. " +
-            "Se houver documentos de identidade, CNH, ou documentos oficiais, " +
-            "destaque quaisquer números ou identificadores em formato de lista."
-        },
-        {
-          role: "user",
-          content: "Esta é uma imagem para análise. Por favor, descreva todo o texto visível, documentos e placas veiculares que você conseguir identificar."
-        }
-      ];
+      // First, enhance the image
+      const enhancedImageUrl = await enhanceImageWithGroq(image.original);
       
-      // In a real implementation, we would use a computer vision API
-      // For now, we'll simulate results with mock data
-      
-      // Mock processing results based on the image name
-      const hasLicensePlate = image.name.toLowerCase().includes('placa') || Math.random() > 0.5;
-      const hasFaces = image.name.toLowerCase().includes('pessoa') || Math.random() > 0.5;
-      
-      // Generate mock OCR text
-      const mockOcrText = hasLicensePlate ? 
-        "PLACA VEICULAR: ABC-1234\nDOCUMENTO: CNH 12345678900\nDATAS VISÍVEIS: 01/05/2023" :
-        "DOCUMENTO: BOLETIM DE OCORRÊNCIA\nNÚMERO: 12345/2023\nDATA: 06/05/2023\nLOCAL: Avenida Principal, 123";
-      
-      // Mock face detection
-      const mockFaces = hasFaces ? [
-        { id: 1, confidence: 0.92, region: { x: 50, y: 30, width: 100, height: 100 } },
-        { id: 2, confidence: 0.87, region: { x: 200, y: 50, width: 90, height: 90 } }
-      ] : [];
-      
-      // Mock license plates
-      const mockLicensePlates = hasLicensePlate ? ["ABC-1234"] : [];
+      // Then, analyze the enhanced image for text and objects
+      const { ocrText, faces, licensePlates } = await analyzeImageWithGroq(enhancedImageUrl);
       
       // Create processed image object
       const processedImage: ProcessedImage = {
         ...image,
-        enhanced: image.original,
-        ocrText: mockOcrText,
-        faces: mockFaces,
-        licensePlates: mockLicensePlates
+        enhanced: enhancedImageUrl,
+        ocrText,
+        faces,
+        licensePlates
       };
       
       setImage(processedImage);
@@ -167,10 +137,10 @@ const ImageAnalysis = () => {
       await saveImageAnalysis({
         caseId: currentCase.id,
         filename: image.name,
-        dataUrl: image.original,
-        ocrText: mockOcrText,
-        faces: mockFaces,
-        licensePlates: mockLicensePlates,
+        dataUrl: enhancedImageUrl,
+        ocrText,
+        faces,
+        licensePlates,
         dateProcessed: new Date().toISOString()
       });
       
