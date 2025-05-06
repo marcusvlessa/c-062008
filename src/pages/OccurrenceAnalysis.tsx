@@ -1,12 +1,19 @@
 
-import React, { useState } from 'react';
-import { Upload, FileText, Check, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Upload, FileText, Check, AlertCircle, Database, Search } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
+import { makeGroqAIRequest } from '../services/groqService';
+import { 
+  parsePdfToText, 
+  convertTextToCSV,
+  saveOccurrenceData,
+  getOccurrencesByCaseId 
+} from '../services/databaseService';
 
 const OccurrenceAnalysis = () => {
   const { currentCase, saveToCurrentCase } = useCase();
@@ -14,8 +21,33 @@ const OccurrenceAnalysis = () => {
   const [fileContent, setFileContent] = useState<string>('');
   const [analysis, setAnalysis] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isCheckingDb, setIsCheckingDb] = useState<boolean>(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Check for existing analysis in the database when case changes
+  useEffect(() => {
+    if (currentCase) {
+      checkForExistingAnalyses();
+    }
+  }, [currentCase]);
+  
+  const checkForExistingAnalyses = async () => {
+    if (!currentCase) return;
+    
+    try {
+      setIsCheckingDb(true);
+      const occurrences = await getOccurrencesByCaseId(currentCase.id);
+      setIsCheckingDb(false);
+      
+      if (occurrences.length > 0) {
+        toast.info(`${occurrences.length} análises encontradas no banco de dados para este caso`);
+      }
+    } catch (error) {
+      console.error('Error checking for existing analyses:', error);
+      setIsCheckingDb(false);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files && e.target.files[0];
     if (selectedFile) {
       if (!['application/pdf', 'text/html'].includes(selectedFile.type)) {
@@ -24,21 +56,20 @@ const OccurrenceAnalysis = () => {
       }
       
       setFile(selectedFile);
-      
-      // For demonstration, we'll just show the file name
-      // In a real implementation, you would parse the PDF/HTML content
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const content = event.target?.result as string;
-        // In a real app, you would parse PDF/HTML here
-        setFileContent(`Conteúdo carregado do arquivo: ${selectedFile.name}`);
-      };
-      reader.readAsText(selectedFile);
+      try {
+        // Extract text from PDF
+        const extractedText = await parsePdfToText(selectedFile);
+        setFileContent(extractedText);
+        toast.success(`Conteúdo extraído de: ${selectedFile.name}`);
+      } catch (error) {
+        console.error('Error parsing file:', error);
+        toast.error('Erro ao processar o arquivo');
+      }
     }
   };
 
   const handleAnalyzeClick = async () => {
-    if (!file) {
+    if (!file || !fileContent) {
       toast.error('Por favor, selecione um arquivo primeiro');
       return;
     }
@@ -49,59 +80,105 @@ const OccurrenceAnalysis = () => {
     }
 
     setIsLoading(true);
-
-    // Simulate API call to LLM
-    setTimeout(() => {
-      // Mock analysis result
-      const mockAnalysis = 
-        `# Análise de Ocorrência\n\n` +
-        `## Resumo do Incidente\n` +
-        `Ocorrência registrada em 05/05/2023 relacionada a possível furto de veículo na região central.\n\n` +
-        `## Sugestões para Investigação\n` +
-        `1. Solicitar imagens de câmeras de segurança do local\n` +
-        `2. Verificar histórico de ocorrências similares na região\n` +
-        `3. Realizar oitiva com testemunhas mencionadas no B.O.\n\n` +
-        `## Despacho Sugerido\n` +
-        `Determino que seja realizada diligência para coleta de imagens de vigilância no local dos fatos, bem como contato com testemunhas para esclarecimentos adicionais.`;
-        
-      setAnalysis(mockAnalysis);
+    
+    try {
+      // First, check if we already have an analysis for this file in this case
+      const occurrences = await getOccurrencesByCaseId(currentCase.id);
+      const existingOccurrence = occurrences.find(o => o.filename === file.name);
       
-      // Save to case
+      if (existingOccurrence) {
+        // Use existing analysis from DB
+        setAnalysis(existingOccurrence.analysis);
+        toast.success('Análise recuperada do banco de dados');
+        setIsLoading(false);
+        return;
+      }
+      
+      // If no existing analysis, call GROQ API
+      const csvContent = convertTextToCSV(fileContent);
+      
+      const messages = [
+        {
+          role: "system",
+          content: 
+            "Você é um assistente especializado em análise de boletins de ocorrência policiais. " +
+            "Sua função é analisar o conteúdo extraído de documentos de ocorrência e gerar um relatório " +
+            "estruturado com: 1) Resumo do Incidente; 2) Sugestões para Investigação; 3) Despacho Sugerido. " +
+            "Use formato Markdown para estruturar sua resposta."
+        },
+        {
+          role: "user",
+          content: `Analise o seguinte conteúdo extraído de um boletim de ocorrência:\n\n${fileContent}\n\nGere um relatório de análise.`
+        }
+      ];
+      
+      const aiAnalysis = await makeGroqAIRequest(messages);
+      setAnalysis(aiAnalysis);
+      
+      // Save to database
+      await saveOccurrenceData({
+        caseId: currentCase.id,
+        filename: file.name,
+        content: csvContent, // Save as CSV
+        analysis: aiAnalysis,
+        dateProcessed: new Date().toISOString()
+      });
+      
+      // Also save to case context
       saveToCurrentCase({
         timestamp: new Date().toISOString(),
         filename: file.name,
-        analysis: mockAnalysis
+        analysis: aiAnalysis
       }, 'occurrenceAnalysis');
       
+      toast.success('Análise concluída e salva no banco de dados');
+    } catch (error) {
+      console.error('Analysis error:', error);
+      toast.error('Erro ao realizar análise');
+    } finally {
       setIsLoading(false);
-      toast.success('Análise concluída com sucesso');
-    }, 2000);
+    }
   };
 
-  const saveAnalysis = () => {
-    if (!analysis || !currentCase) {
+  const saveAnalysis = async () => {
+    if (!analysis || !currentCase || !file) {
       toast.error('Não há análise para salvar ou nenhum caso selecionado');
       return;
     }
 
-    // Save analysis to case
-    saveToCurrentCase({
-      timestamp: new Date().toISOString(),
-      filename: file?.name || 'Análise manual',
-      analysis: analysis
-    }, 'occurrenceAnalysis');
-    
-    toast.success('Análise salva com sucesso no caso atual');
+    try {
+      // Save to database
+      const csvContent = convertTextToCSV(fileContent);
+      await saveOccurrenceData({
+        caseId: currentCase.id,
+        filename: file.name,
+        content: csvContent,
+        analysis: analysis,
+        dateProcessed: new Date().toISOString()
+      });
+      
+      // Save to case context
+      saveToCurrentCase({
+        timestamp: new Date().toISOString(),
+        filename: file.name || 'Análise manual',
+        analysis: analysis
+      }, 'occurrenceAnalysis');
+      
+      toast.success('Análise salva com sucesso no caso atual e no banco de dados');
+    } catch (error) {
+      console.error('Save error:', error);
+      toast.error('Erro ao salvar análise');
+    }
   };
 
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
-          Análise de Ocorrência
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
+          <Search className="mr-2 h-6 w-6" /> Análise de Ocorrência
         </h1>
         <p className="text-gray-600 dark:text-gray-300">
-          Faça upload de documentos de ocorrências para análise automática e sugestões
+          Faça upload de documentos de ocorrências para análise com IA e sugestões
         </p>
       </div>
 
@@ -124,6 +201,10 @@ const OccurrenceAnalysis = () => {
                 <CardTitle className="flex items-center gap-2">
                   <Upload className="h-5 w-5" /> Upload de Documento
                 </CardTitle>
+                <CardDescription className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <Database className="h-4 w-4" /> 
+                  Os documentos são processados e salvos no banco de dados local
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -160,10 +241,10 @@ const OccurrenceAnalysis = () => {
 
                   <Button
                     onClick={handleAnalyzeClick}
-                    disabled={!file || isLoading}
+                    disabled={!file || isLoading || isCheckingDb}
                     className="w-full"
                   >
-                    {isLoading ? 'Analisando...' : 'Analisar Ocorrência'}
+                    {isLoading ? 'Analisando com IA...' : isCheckingDb ? 'Verificando BD...' : 'Analisar Ocorrência'}
                   </Button>
                 </div>
               </CardContent>
@@ -200,7 +281,7 @@ const OccurrenceAnalysis = () => {
                   <div className="flex flex-col items-center justify-center p-8">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 dark:border-gray-100" />
                     <p className="mt-4 text-gray-600 dark:text-gray-400">
-                      Processando documentos e gerando análise...
+                      Processando documentos e gerando análise com IA...
                     </p>
                   </div>
                 ) : analysis ? (

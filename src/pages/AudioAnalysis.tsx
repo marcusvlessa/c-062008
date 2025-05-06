@@ -1,17 +1,20 @@
 
-import React, { useState } from 'react';
-import { Upload, AudioWaveform, Mic, FileText, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Upload, AudioWaveform, Mic, FileText, AlertCircle, Database } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
+import { transcribeAudioWithGroq, makeGroqAIRequest } from '../services/groqService';
+import { saveAudioTranscription, getAudioTranscriptionsByCaseId } from '../services/databaseService';
 
 interface AudioFile {
   id: string;
   name: string;
   url: string;
+  file: File;
   transcription?: string;
 }
 
@@ -22,6 +25,31 @@ const AudioAnalysis = () => {
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [report, setReport] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [isCheckingDb, setIsCheckingDb] = useState<boolean>(false);
+
+  // Check for existing transcriptions in the database when case changes
+  useEffect(() => {
+    if (currentCase) {
+      checkForExistingTranscriptions();
+    }
+  }, [currentCase]);
+
+  const checkForExistingTranscriptions = async () => {
+    if (!currentCase) return;
+    
+    try {
+      setIsCheckingDb(true);
+      const transcriptions = await getAudioTranscriptionsByCaseId(currentCase.id);
+      setIsCheckingDb(false);
+      
+      if (transcriptions.length > 0) {
+        toast.info(`${transcriptions.length} transcrições encontradas no banco de dados para este caso`);
+      }
+    } catch (error) {
+      console.error('Error checking for existing transcriptions:', error);
+      setIsCheckingDb(false);
+    }
+  };
 
   const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -39,54 +67,69 @@ const AudioAnalysis = () => {
     const newAudio: AudioFile = {
       id: `audio-${Date.now()}`,
       name: file.name,
-      url: audioUrl
+      url: audioUrl,
+      file: file
     };
     
     setAudioFiles([...audioFiles, newAudio]);
     toast.success(`Áudio "${file.name}" adicionado com sucesso`);
   };
 
-  const handleTranscribe = (audio: AudioFile) => {
+  const handleTranscribe = async (audio: AudioFile) => {
     setSelectedAudio(audio);
     setIsTranscribing(true);
     
-    // Check for API key
-    const settings = localStorage.getItem('securai-api-settings');
-    if (!settings) {
-      toast.error('Chave de API não configurada. Configure nas Configurações.');
-      setIsTranscribing(false);
-      return;
-    }
-    
-    // In a real implementation, we would send the audio to Whisper API
-    // For now, we'll simulate a transcription after a delay
-    setTimeout(() => {
-      const mockTranscription = `[00:00:05] Interlocutor 1: Olá, estamos gravando esse áudio para teste do sistema de transcrição.
-
-[00:00:12] Interlocutor 2: Entendido. Vamos simular uma conversa para ver se o sistema consegue identificar os diferentes interlocutores.
-
-[00:00:20] Interlocutor 1: Exatamente. O sistema deve ser capaz de separar automaticamente as falas e atribuir a diferentes pessoas.
-
-[00:00:31] Interlocutor 2: E também deve registrar o tempo de cada fala, para facilitar a localização posteriormente na gravação original.
-
-[00:00:40] Interlocutor 3: Eu sou um terceiro interlocutor entrando na conversa para testar se o sistema consegue identificar mais de duas pessoas.
-
-[00:00:52] Interlocutor 1: Perfeito, isso ajudará bastante nas investigações que envolvem múltiplos suspeitos ou testemunhas.`;
+    try {
+      // Check if we already have this audio transcribed in the database
+      if (currentCase) {
+        const transcriptions = await getAudioTranscriptionsByCaseId(currentCase.id);
+        const existingTranscription = transcriptions.find(t => t.filename === audio.name);
+        
+        if (existingTranscription) {
+          // Use existing transcription from DB
+          const updatedAudioFiles = audioFiles.map(a => 
+            a.id === audio.id ? { ...a, transcription: existingTranscription.transcription } : a
+          );
+          
+          setAudioFiles(updatedAudioFiles);
+          setSelectedAudio({ ...audio, transcription: existingTranscription.transcription });
+          toast.success('Transcrição recuperada do banco de dados');
+          setIsTranscribing(false);
+          return;
+        }
+      }
+      
+      // If no existing transcription, call GROQ Whisper API
+      const transcription = await transcribeAudioWithGroq(audio.file);
       
       // Update the audio file with transcription
       const updatedAudioFiles = audioFiles.map(a => 
-        a.id === audio.id ? { ...a, transcription: mockTranscription } : a
+        a.id === audio.id ? { ...a, transcription } : a
       );
       
       setAudioFiles(updatedAudioFiles);
-      setSelectedAudio({ ...audio, transcription: mockTranscription });
-      setIsTranscribing(false);
+      setSelectedAudio({ ...audio, transcription });
+      
+      // Save to database if we have a case
+      if (currentCase) {
+        await saveAudioTranscription({
+          caseId: currentCase.id,
+          filename: audio.name,
+          transcription,
+          dateProcessed: new Date().toISOString()
+        });
+      }
       
       toast.success('Transcrição concluída com sucesso');
-    }, 3000);
+    } catch (error) {
+      console.error('Transcription error:', error);
+      toast.error('Erro ao transcrever áudio');
+    } finally {
+      setIsTranscribing(false);
+    }
   };
 
-  const generateReport = () => {
+  const generateReport = async () => {
     const audiosWithTranscription = audioFiles.filter(a => a.transcription);
     
     if (audiosWithTranscription.length === 0) {
@@ -101,49 +144,49 @@ const AudioAnalysis = () => {
     
     setIsGenerating(true);
     
-    // Mock report generation
-    setTimeout(() => {
-      const mockReport = `# RELATÓRIO DE ANÁLISE DE ÁUDIO
+    try {
+      // Use GROQ API to generate report
+      const allTranscriptions = audiosWithTranscription
+        .map(a => `## Arquivo: ${a.name}\n\n${a.transcription}`)
+        .join('\n\n');
       
-## 1. INFORMAÇÕES GERAIS
-- **Caso Nº**: ${currentCase.id}
-- **Título**: ${currentCase.title}
-- **Data do Relatório**: ${new Date().toLocaleDateString('pt-BR')}
-- **Quantidade de Áudios**: ${audiosWithTranscription.length}
-
-## 2. ARQUIVOS ANALISADOS
-${audiosWithTranscription.map((audio, idx) => `
-### 2.${idx + 1}. ${audio.name}
-- **Duração estimada**: ${Math.floor(Math.random() * 10) + 1}:${Math.floor(Math.random() * 60).toString().padStart(2, '0')} minutos
-- **Formato**: ${audio.name.split('.').pop()?.toUpperCase() || 'MP3'}
-- **Qualidade da gravação**: ${['Excelente', 'Boa', 'Razoável'][Math.floor(Math.random() * 3)]}
-`).join('\n')}
-
-## 3. IDENTIFICAÇÃO DE INTERLOCUTORES
-Foram identificados **3 interlocutores** distintos nas gravações analisadas:
-- **Interlocutor 1**: Voz masculina, tom grave, fala pausada
-- **Interlocutor 2**: Voz masculina, tom médio, fala rápida
-- **Interlocutor 3**: Voz feminina, tom agudo, fala articulada
-
-## 4. TRANSCRIÇÃO CONSOLIDADA
-${audiosWithTranscription.map(audio => audio.transcription).join('\n\n')}
-
-## 5. PONTOS DE INTERESSE NA CONVERSA
-1. [00:00:20] - Menção a "sistema" - potencial referência a esquema organizacional
-2. [00:00:52] - Referência a "investigações" e "múltiplos suspeitos"
-
-## 6. CONCLUSÕES E RECOMENDAÇÕES
-- Realizar a oitiva dos interlocutores identificados
-- Confrontar as informações obtidas com outras evidências do caso
-- Aprofundar investigação sobre os pontos de interesse identificados
-
-Relatório elaborado em ${new Date().toLocaleDateString('pt-BR')}.`;
+      const messages = [
+        {
+          role: "system",
+          content: 
+            "Você é um assistente especializado em análise de gravações de áudio. " +
+            "Sua função é analisar transcrições de áudios e gerar um relatório detalhado. " +
+            "O relatório deve incluir: 1) Informações gerais; 2) Arquivos analisados; " +
+            "3) Identificação de interlocutores; 4) Transcrição consolidada; " +
+            "5) Pontos de interesse; 6) Conclusões e recomendações. " +
+            "Use formato Markdown para estruturar sua resposta."
+        },
+        {
+          role: "user",
+          content: `Caso: ${currentCase.title}\n\nAnalise as seguintes transcrições de áudio e gere um relatório detalhado:\n\n${allTranscriptions}`
+        }
+      ];
       
-      setReport(mockReport);
-      setIsGenerating(false);
+      const generatedReport = await makeGroqAIRequest(messages, 2048);
+      setReport(generatedReport);
+      
+      // Save to case
+      saveToCurrentCase({
+        timestamp: new Date().toISOString(),
+        audioFiles: audioFiles.map(a => ({
+          name: a.name,
+          hasTranscription: !!a.transcription
+        })),
+        report: generatedReport
+      }, 'audioAnalysis');
       
       toast.success('Relatório gerado com sucesso');
-    }, 3000);
+    } catch (error) {
+      console.error('Report generation error:', error);
+      toast.error('Erro ao gerar relatório');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const saveToCase = () => {
@@ -168,8 +211,8 @@ Relatório elaborado em ${new Date().toLocaleDateString('pt-BR')}.`;
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
-          Análise de Áudio
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
+          <AudioWaveform className="mr-2 h-6 w-6" /> Análise de Áudio
         </h1>
         <p className="text-gray-600 dark:text-gray-300">
           Transcreva e analise áudios para criar relatórios detalhados
@@ -195,8 +238,9 @@ Relatório elaborado em ${new Date().toLocaleDateString('pt-BR')}.`;
                 <CardTitle className="flex items-center gap-2">
                   <Upload className="h-5 w-5" /> Upload de Áudio
                 </CardTitle>
-                <CardDescription>
-                  Faça upload de arquivos de áudio para transcrição e análise
+                <CardDescription className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <Database className="h-4 w-4" />
+                  As transcrições são processadas e salvas no banco de dados local
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -276,7 +320,7 @@ Relatório elaborado em ${new Date().toLocaleDateString('pt-BR')}.`;
                       disabled={!audioFiles.some(a => a.transcription) || isGenerating}
                       className="w-full mt-4"
                     >
-                      {isGenerating ? 'Gerando relatório...' : 'Gerar Relatório Consolidado'}
+                      {isGenerating ? 'Gerando relatório com IA...' : 'Gerar Relatório Consolidado'}
                     </Button>
                   </div>
                 )}
@@ -301,14 +345,14 @@ Relatório elaborado em ${new Date().toLocaleDateString('pt-BR')}.`;
                   <div className="flex flex-col items-center justify-center h-full p-8">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 dark:border-gray-100" />
                     <p className="mt-4 text-gray-600 dark:text-gray-400">
-                      Transcrevendo áudio com Whisper...
+                      Transcrevendo áudio com Whisper via GROQ...
                     </p>
                   </div>
                 ) : isGenerating ? (
                   <div className="flex flex-col items-center justify-center h-full p-8">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 dark:border-gray-100" />
                     <p className="mt-4 text-gray-600 dark:text-gray-400">
-                      Analisando transcrições e gerando relatório...
+                      Analisando transcrições e gerando relatório com IA...
                     </p>
                   </div>
                 ) : selectedAudio && selectedAudio.transcription ? (
