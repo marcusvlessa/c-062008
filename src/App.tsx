@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from './components/ui/sonner';
 import SideNavigation from './components/SideNavigation';
 import Dashboard from './pages/Dashboard';
@@ -25,7 +25,7 @@ function App() {
     if (!settings.groqApiKey && !localStorage.getItem('securai-api-settings')) {
       // Set default endpoints if not configured
       saveGroqSettings({
-        groqApiKey: '',  // Será configurado pelo usuário na página de Configurações
+        groqApiKey: '',  // Configurado pelo usuário na página de Configurações
         groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
         groqModel: 'meta-llama/llama-4-maverick-17b-128e-instruct',
         whisperModel: 'distil-whisper-large-v3',  // Versão mais recente do modelo
@@ -38,25 +38,27 @@ function App() {
   }, []);
 
   return (
-    <CaseProvider>
-      <div className="flex h-screen bg-gray-100 dark:bg-gray-950">
-        <SideNavigation />
-        <div className="flex-1 overflow-auto">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/occurrence-analysis" element={<OccurrenceAnalysis />} />
-            <Route path="/investigation-report" element={<InvestigationReport />} />
-            <Route path="/link-analysis" element={<LinkAnalysis />} />
-            <Route path="/audio-analysis" element={<AudioAnalysis />} />
-            <Route path="/image-analysis" element={<ImageAnalysis />} />
-            <Route path="/case-management" element={<CaseManagement />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+    <BrowserRouter>
+      <CaseProvider>
+        <div className="flex h-screen bg-gray-100 dark:bg-gray-950">
+          <SideNavigation />
+          <div className="flex-1 overflow-auto">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/occurrence-analysis" element={<OccurrenceAnalysis />} />
+              <Route path="/investigation-report" element={<InvestigationReport />} />
+              <Route path="/link-analysis" element={<LinkAnalysis />} />
+              <Route path="/audio-analysis" element={<AudioAnalysis />} />
+              <Route path="/image-analysis" element={<ImageAnalysis />} />
+              <Route path="/case-management" element={<CaseManagement />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </div>
         </div>
-      </div>
-      <Toaster />
-    </CaseProvider>
+        <Toaster />
+      </CaseProvider>
+    </BrowserRouter>
   );
 }
 

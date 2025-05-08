@@ -35,6 +35,7 @@ const ImageAnalysis = () => {
   const [isCheckingDb, setIsCheckingDb] = useState<boolean>(false);
   const [showFaceBox, setShowFaceBox] = useState<boolean>(true);
   const imageContainerRef = useRef<HTMLDivElement>(null);
+  const [imageElement, setImageElement] = useState<HTMLImageElement | null>(null);
 
   // Check for existing analyses in the database when case changes
   useEffect(() => {
@@ -42,6 +43,14 @@ const ImageAnalysis = () => {
       checkForExistingAnalyses();
     }
   }, [currentCase]);
+
+  // Capture the image element for correct face box positioning
+  useEffect(() => {
+    if (imageContainerRef.current) {
+      const img = imageContainerRef.current.querySelector('img');
+      setImageElement(img as HTMLImageElement);
+    }
+  }, [image, activeTab]);
 
   const checkForExistingAnalyses = async () => {
     if (!currentCase) return;
@@ -120,11 +129,13 @@ const ImageAnalysis = () => {
         return;
       }
       
-      // First, enhance the image
+      // First, enhance the image with real image processing
       const enhancedImageUrl = await enhanceImageWithGroq(image.original);
       
       // Then, analyze the enhanced image for text and objects
       const { ocrText, faces, licensePlates } = await analyzeImageWithGroq(enhancedImageUrl);
+      
+      console.log('Analysis results:', { ocrText, faces, licensePlates });
       
       // Create processed image object
       const processedImage: ProcessedImage = {
@@ -154,10 +165,10 @@ const ImageAnalysis = () => {
         timestamp: new Date().toISOString(),
         imageName: image.name,
         processingResults: {
-          hasOcr: true,
+          hasOcr: ocrText && ocrText.length > 0,
           ocrText: processedImage.ocrText,
-          facesDetected: processedImage.faces?.length || 0,
-          licensePlatesDetected: processedImage.licensePlates?.length || 0
+          facesDetected: (processedImage.faces?.length || 0),
+          licensePlatesDetected: (processedImage.licensePlates?.length || 0)
         }
       }, 'imageAnalysis');
       
@@ -171,15 +182,16 @@ const ImageAnalysis = () => {
   };
 
   // Function to calibrate face box positions based on current image display size
-  const calibrateFaceBoxPositions = (face: any, imgElement: HTMLImageElement | null) => {
-    if (!imgElement || !imageContainerRef.current) return face.region;
+  const calibrateFaceBoxPositions = (face: any) => {
+    if (!imageElement || !imageContainerRef.current) {
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
     
-    const containerRect = imageContainerRef.current.getBoundingClientRect();
-    const imgRect = imgElement.getBoundingClientRect();
+    const imgRect = imageElement.getBoundingClientRect();
     
-    // Calculate scaling factors
-    const scaleX = imgRect.width / imgElement.naturalWidth;
-    const scaleY = imgRect.height / imgElement.naturalHeight;
+    // Calculate scaling factors between natural image size and displayed size
+    const scaleX = imgRect.width / imageElement.naturalWidth;
+    const scaleY = imgRect.height / imageElement.naturalHeight;
     
     // Return adjusted coordinates
     return {
@@ -193,12 +205,10 @@ const ImageAnalysis = () => {
   const renderFaceBoxes = () => {
     if (!image?.faces || !image.faces.length || !showFaceBox) return null;
     
-    const imgElement = imageContainerRef.current?.querySelector('img');
-    
     return (
       <div className="absolute inset-0 pointer-events-none">
         {image.faces.map((face) => {
-          const adjustedRegion = calibrateFaceBoxPositions(face, imgElement as HTMLImageElement);
+          const adjustedRegion = calibrateFaceBoxPositions(face);
           
           return (
             <div
