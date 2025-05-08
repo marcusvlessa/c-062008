@@ -9,7 +9,7 @@ import { useCase } from '../contexts/CaseContext';
 import { generateInvestigationReportWithGroq } from '../services/groqService';
 
 const InvestigationReport = () => {
-  const { currentCase } = useCase();
+  const { currentCase, getCaseData } = useCase();
   const [reportContent, setReportContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState('report');
@@ -21,49 +21,45 @@ const InvestigationReport = () => {
       const combinedEvidence: any[] = [];
       
       // Combine all types of evidence
-      if (currentCase.occurrenceAnalysis) {
-        currentCase.occurrenceAnalysis.forEach((item: any) => {
-          combinedEvidence.push({
-            name: item.filename || "Documento sem nome",
-            type: 'text',
-            content: item.analysis || "",
-            date: item.timestamp
-          });
+      const occurrenceAnalysisData = getCaseData('occurrenceAnalysis') || [];
+      occurrenceAnalysisData.forEach((item: any) => {
+        combinedEvidence.push({
+          name: item.filename || "Documento sem nome",
+          type: 'text',
+          content: item.analysis || "",
+          date: item.timestamp
         });
-      }
+      });
 
-      if (currentCase.imageAnalysis) {
-        currentCase.imageAnalysis.forEach((item: any) => {
-          combinedEvidence.push({
-            name: item.imageName || "Imagem sem nome",
-            type: 'image',
-            analysis: item.processingResults,
-            date: item.timestamp
-          });
+      const imageAnalysisData = getCaseData('imageAnalysis') || [];
+      imageAnalysisData.forEach((item: any) => {
+        combinedEvidence.push({
+          name: item.imageName || "Imagem sem nome",
+          type: 'image',
+          analysis: item.processingResults,
+          date: item.timestamp
         });
-      }
+      });
 
-      if (currentCase.audioAnalysis) {
-        currentCase.audioAnalysis.forEach((item: any) => {
-          combinedEvidence.push({
-            name: item.filename || "Áudio sem nome",
-            type: 'audio',
-            transcript: item.transcript || "",
-            date: item.timestamp
-          });
+      const audioAnalysisData = getCaseData('audioAnalysis') || [];
+      audioAnalysisData.forEach((item: any) => {
+        combinedEvidence.push({
+          name: item.filename || "Áudio sem nome",
+          type: 'audio',
+          transcript: item.transcript || "",
+          date: item.timestamp
         });
-      }
+      });
 
-      if (currentCase.linkAnalysis) {
-        currentCase.linkAnalysis.forEach((item: any) => {
-          combinedEvidence.push({
-            name: item.filename || "Análise de vínculo sem nome",
-            type: 'link',
-            graphData: item.networkData || null,
-            date: item.timestamp
-          });
+      const linkAnalysisData = getCaseData('linkAnalysis') || [];
+      linkAnalysisData.forEach((item: any) => {
+        combinedEvidence.push({
+          name: item.filename || "Análise de vínculo sem nome",
+          type: 'link',
+          graphData: item.networkData || null,
+          date: item.timestamp
         });
-      }
+      });
 
       // Sort by date (newest first)
       combinedEvidence.sort((a, b) => {
@@ -72,7 +68,7 @@ const InvestigationReport = () => {
 
       setEvidences(combinedEvidence);
     }
-  }, [currentCase]);
+  }, [currentCase, getCaseData]);
 
   const generateReport = async () => {
     if (!currentCase) {
@@ -166,7 +162,7 @@ const InvestigationReport = () => {
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Status</h3>
-                    <p className="text-sm">{currentCase.status || "Indefinido"}</p>
+                    <p className="text-sm">{currentCase.status || "Ativo"}</p>
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Evidências Disponíveis</h3>

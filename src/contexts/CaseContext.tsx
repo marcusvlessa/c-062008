@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export interface Case {
@@ -7,6 +6,7 @@ export interface Case {
   description: string;
   dateCreated: string;
   lastModified: string;
+  status?: string;
 }
 
 interface CaseContextType {
@@ -63,6 +63,7 @@ export const CaseProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `case-${Date.now()}`,
       dateCreated: new Date().toISOString(),
       lastModified: new Date().toISOString(),
+      status: 'Ativo', // Default status
     };
     
     setCases(prevCases => [...prevCases, newCase]);
