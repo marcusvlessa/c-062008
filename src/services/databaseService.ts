@@ -1,3 +1,4 @@
+
 /**
  * Parses a PDF file to extract text content
  */
@@ -176,6 +177,129 @@ export const getOccurrencesByCaseId = async (caseId: string): Promise<any[]> => 
     return [];
   } catch (error) {
     console.error('Error retrieving occurrences:', error);
+    return [];
+  }
+};
+
+/**
+ * Saves audio transcription data
+ */
+export const saveAudioTranscription = async (data: {
+  caseId: string;
+  filename: string;
+  transcription: string;
+  speakerData?: string;
+  dateProcessed: string;
+}): Promise<boolean> => {
+  console.log('Saving audio transcription for case:', data.caseId);
+  console.log('With filename:', data.filename);
+  console.log('Transcription length:', data.transcription?.length || 0);
+  
+  try {
+    // For mock purposes, we just simulate saving to local storage
+    const storageKey = `securai-audio-transcriptions`;
+    const existingData = localStorage.getItem(storageKey);
+    const transcriptions = existingData ? JSON.parse(existingData) : [];
+    
+    // Add the new transcription
+    transcriptions.push(data);
+    
+    // Save back to local storage
+    localStorage.setItem(storageKey, JSON.stringify(transcriptions));
+    
+    console.log('Audio transcription saved successfully');
+    return true;
+  } catch (error) {
+    console.error('Error saving audio transcription:', error);
+    return false;
+  }
+};
+
+/**
+ * Retrieves audio transcriptions by case ID
+ */
+export const getAudioTranscriptionsByCaseId = async (caseId: string): Promise<any[]> => {
+  console.log('Retrieving audio transcriptions for case:', caseId);
+  
+  try {
+    // For mock purposes, we just fetch from local storage
+    const storageKey = `securai-audio-transcriptions`;
+    const existingData = localStorage.getItem(storageKey);
+    
+    if (!existingData) {
+      console.log('No audio transcriptions found');
+      return [];
+    }
+    
+    const transcriptions = JSON.parse(existingData);
+    const caseTranscriptions = transcriptions.filter((t: any) => t.caseId === caseId);
+    
+    console.log(`Found ${caseTranscriptions.length} transcriptions for case ${caseId}`);
+    return caseTranscriptions;
+  } catch (error) {
+    console.error('Error retrieving audio transcriptions:', error);
+    return [];
+  }
+};
+
+/**
+ * Saves image analysis data
+ */
+export const saveImageAnalysis = async (data: {
+  caseId: string;
+  filename: string;
+  dataUrl: string;
+  ocrText?: string;
+  faces?: any[];
+  licensePlates?: string[];
+  dateProcessed: string;
+}): Promise<boolean> => {
+  console.log('Saving image analysis for case:', data.caseId);
+  console.log('With filename:', data.filename);
+  
+  try {
+    // For mock purposes, we just simulate saving to local storage
+    const storageKey = `securai-image-analyses`;
+    const existingData = localStorage.getItem(storageKey);
+    const analyses = existingData ? JSON.parse(existingData) : [];
+    
+    // Add the new analysis
+    analyses.push(data);
+    
+    // Save back to local storage
+    localStorage.setItem(storageKey, JSON.stringify(analyses));
+    
+    console.log('Image analysis saved successfully');
+    return true;
+  } catch (error) {
+    console.error('Error saving image analysis:', error);
+    return false;
+  }
+};
+
+/**
+ * Retrieves image analyses by case ID
+ */
+export const getImageAnalysesByCaseId = async (caseId: string): Promise<any[]> => {
+  console.log('Retrieving image analyses for case:', caseId);
+  
+  try {
+    // For mock purposes, we just fetch from local storage
+    const storageKey = `securai-image-analyses`;
+    const existingData = localStorage.getItem(storageKey);
+    
+    if (!existingData) {
+      console.log('No image analyses found');
+      return [];
+    }
+    
+    const analyses = JSON.parse(existingData);
+    const caseAnalyses = analyses.filter((a: any) => a.caseId === caseId);
+    
+    console.log(`Found ${caseAnalyses.length} image analyses for case ${caseId}`);
+    return caseAnalyses;
+  } catch (error) {
+    console.error('Error retrieving image analyses:', error);
     return [];
   }
 };
