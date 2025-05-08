@@ -3,7 +3,7 @@
  * Parses a PDF file to extract text content
  */
 export const parsePdfToText = async (file: File): Promise<string> => {
-  console.log('Starting parsePdfToText with file:', file.name);
+  console.log('Starting parsePdfToText with file:', file.name, 'type:', file.type, 'size:', file.size);
   
   // For mock purposes, check if we're using specific test files
   // This ensures we have reliable mock data for testing without API keys
@@ -17,13 +17,16 @@ export const parsePdfToText = async (file: File): Promise<string> => {
   
   // Check for different types of test files to provide appropriate mock content
   if (fileName.includes('bo') || fileName.includes('ocorrencia') || fileName.includes('test')) {
-    console.log('Test file detected, returning mock occurrence data');
-    return getMockOccurrenceContent(fileName);
+    console.log('Test file detected, returning mock occurrence data for:', fileName);
+    const mockContent = getMockOccurrenceContent(fileName);
+    console.log('Mock content length:', mockContent.length);
+    return mockContent;
   }
 
   try {
-    // For real PDFs, use PDF.js to parse
+    // For real PDFs, attempt to parse
     const arrayBuffer = await file.arrayBuffer();
+    console.log('File loaded as ArrayBuffer, size:', arrayBuffer.byteLength);
     
     // Check if actual PDF parsing should be attempted (based on API settings)
     const apiSettings = localStorage.getItem('securai-api-settings');
@@ -31,18 +34,25 @@ export const parsePdfToText = async (file: File): Promise<string> => {
     
     if (!hasApiKey) {
       console.log('No API key configured, using mock data');
-      return getMockOccurrenceContent(fileName);
+      // Use a more generic mock data since this isn't a test file
+      const genericMock = getMockOccurrenceContent('generic');
+      console.log('Generic mock content length:', genericMock.length);
+      return genericMock;
     }
     
     console.log('Attempting to parse real PDF file');
     
     // Here would be the real PDF parsing code
-    // For now, we'll just return mock data since we're focusing on mock functionality
-    return getMockOccurrenceContent(fileName);
+    // For now, return the mock data since we're focusing on mock functionality
+    const fallbackMock = getMockOccurrenceContent(fileName || 'generic');
+    console.log('Using fallback mock content, length:', fallbackMock.length);
+    return fallbackMock;
   } catch (error) {
     console.error('Error parsing PDF:', error);
     console.log('Falling back to mock data due to error');
-    return getMockOccurrenceContent('error');
+    const errorMock = getMockOccurrenceContent('error');
+    console.log('Error mock content length:', errorMock.length);
+    return errorMock;
   }
 };
 
@@ -91,6 +101,32 @@ function getMockOccurrenceContent(fileName: string): string {
     A vítima relata que foi agredida verbalmente e fisicamente pelo acusado, seu ex-namorado, quando saía de seu local de trabalho. Segundo a declarante, o acusado a aguardava na saída e iniciou uma discussão por não aceitar o término do relacionamento. Testemunhas confirmam que o acusado a empurrou e ameaçou. A vítima apresenta escoriações leves no braço direito. Solicita medida protetiva de urgência.
     
     Encaminhada para exame de corpo de delito. Intimado o acusado para prestar esclarecimentos.`;
+  }
+  else if (fileName === 'generic') {
+    return `BOLETIM DE OCORRÊNCIA Nº 4321/2023
+    Data: 03/06/2023
+    Hora: 08:30
+    Local: Avenida Brasil, 789, São Paulo/SP
+    
+    COMUNICANTE:
+    Nome: Ana Carolina Ferreira
+    RG: 34.567.890-2
+    CPF: 345.678.901-23
+    Endereço: Rua Conselheiro Nébias, 500, São Paulo/SP
+    
+    FATO:
+    A comunicante relatou que teve seu celular Samsung Galaxy S21 subtraído mediante grave ameaça por dois indivíduos em uma motocicleta preta sem placa. O fato ocorreu quando a vítima caminhava pela calçada. Um dos indivíduos desceu da motocicleta, simulou estar armado e exigiu a entrega do aparelho. Após a subtração, ambos fugiram no sentido centro da cidade.
+    
+    TESTEMUNHAS:
+    José Ricardo Oliveira - presenciou o fato de dentro de um estabelecimento comercial próximo.
+    
+    Determinadas diligências para análise de câmeras de segurança da região e patrulhamento para localização dos suspeitos.`;
+  }
+  else if (fileName === 'error' || fileName === 'empty') {
+    return `BOLETIM DE OCORRÊNCIA [FALHA NA EXTRAÇÃO]
+    
+    Não foi possível extrair completamente os dados deste documento devido a problemas técnicos. 
+    Por favor, verifique o arquivo original ou tente novamente com outro documento.`;
   }
   else {
     // Default mock content
@@ -171,10 +207,25 @@ export const getOccurrencesByCaseId = async (caseId: string): Promise<any[]> => 
   console.log('Retrieving occurrences for case:', caseId);
   
   try {
-    // Here would be database retrieval logic
-    // For mock purposes, we return an empty array
-    console.log('No occurrences found in local storage for this case');
-    return [];
+    // For mock purposes, use local storage for this implementation
+    const storageKey = `securai-occurrences`;
+    const existingData = localStorage.getItem(storageKey);
+    
+    if (!existingData) {
+      console.log('No occurrences found in local storage');
+      return [];
+    }
+    
+    try {
+      const occurrences = JSON.parse(existingData);
+      const caseOccurrences = occurrences.filter((o: any) => o.caseId === caseId);
+      
+      console.log(`Found ${caseOccurrences.length} occurrences for case ${caseId}`);
+      return caseOccurrences;
+    } catch (parseError) {
+      console.error('Error parsing occurrences data:', parseError);
+      return [];
+    }
   } catch (error) {
     console.error('Error retrieving occurrences:', error);
     return [];
