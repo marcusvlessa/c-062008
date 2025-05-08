@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Key, Save, FileAudio, MessageSquare } from 'lucide-react';
 import { Input } from '../components/ui/input';
@@ -27,7 +26,19 @@ const Settings = () => {
   useEffect(() => {
     const savedSettings = localStorage.getItem('securai-api-settings');
     if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
+      try {
+        const parsedSettings = JSON.parse(savedSettings);
+        console.log('Loaded API settings:', { 
+          ...parsedSettings, 
+          groqApiKey: parsedSettings.groqApiKey ? '****' : 'Not set' 
+        });
+        setSettings(parsedSettings);
+      } catch (error) {
+        console.error('Error parsing saved settings:', error);
+        toast.error('Erro ao carregar configurações salvas');
+      }
+    } else {
+      console.log('No saved settings found, using defaults');
     }
   }, []);
 
@@ -41,8 +52,43 @@ const Settings = () => {
   };
 
   const saveSettings = () => {
-    localStorage.setItem('securai-api-settings', JSON.stringify(settings));
-    toast.success('Configurações salvas com sucesso');
+    try {
+      localStorage.setItem('securai-api-settings', JSON.stringify(settings));
+      console.log('Settings saved successfully:', { 
+        ...settings, 
+        groqApiKey: settings.groqApiKey ? '****' : 'Not set' 
+      });
+      toast.success('Configurações salvas com sucesso');
+      
+      // Clear application data to force fresh API calls with new settings
+      if (window.confirm('Deseja limpar os dados em cache para usar as novas configurações?')) {
+        // Clear specific localStorage items except settings and case data
+        const keysToKeep = [
+          'securai-api-settings',
+          'securai-cases',
+          'securai-current-case'
+        ];
+        
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && !keysToKeep.includes(key) && key.startsWith('securai-')) {
+            localStorage.removeItem(key);
+          }
+        }
+        
+        toast.info('Cache limpo. As próximas operações usarão as novas configurações.');
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Erro ao salvar configurações');
+    }
+  };
+
+  const clearApiKey = () => {
+    if (window.confirm('Tem certeza que deseja remover a chave de API? O sistema usará dados de demonstração.')) {
+      setSettings(prev => ({ ...prev, groqApiKey: '' }));
+      toast.info('Chave de API removida. O sistema agora usará dados de demonstração.');
+    }
   };
 
   return (
@@ -70,6 +116,12 @@ const Settings = () => {
                   As chaves de API são armazenadas apenas localmente no seu navegador 
                   e são necessárias para o funcionamento do sistema.
                 </p>
+                
+                <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 rounded border border-yellow-200 dark:border-yellow-800">
+                  <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                    <strong>Dica:</strong> Se você não tiver uma chave de API, o sistema funcionará em modo de demonstração com dados simulados.
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -82,17 +134,33 @@ const Settings = () => {
                     <label htmlFor="groqApiKey" className="text-sm font-medium">
                       Chave da API GROQ
                     </label>
-                    <Input
-                      id="groqApiKey"
-                      name="groqApiKey"
-                      type="password"
-                      placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxx"
-                      value={settings.groqApiKey}
-                      onChange={handleChange}
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        id="groqApiKey"
+                        name="groqApiKey"
+                        type="password"
+                        placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxx"
+                        value={settings.groqApiKey}
+                        onChange={handleChange}
+                        className="flex-1"
+                      />
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={clearApiKey}
+                        className="whitespace-nowrap"
+                      >
+                        Remover Chave
+                      </Button>
+                    </div>
                     <p className="text-xs text-gray-500">
                       Ex: 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
                     </p>
+                    {!settings.groqApiKey && (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                        Sem chave configurada. O sistema usará dados de demonstração.
+                      </p>
+                    )}
                   </div>
                   
                   <div className="space-y-2">
@@ -189,7 +257,7 @@ const Settings = () => {
                 <h3 className="text-lg font-medium mb-2">Informações do Sistema</h3>
                 <div className="space-y-1">
                   <p className="text-sm">Versão: 1.0.0</p>
-                  <p className="text-sm">Modo de execução: Local</p>
+                  <p className="text-sm">Modo de execução: {settings.groqApiKey ? 'API Externa' : 'Demonstração (Mock)'}</p>
                   <p className="text-sm">Armazenamento: LocalStorage</p>
                 </div>
               </div>
@@ -200,6 +268,7 @@ const Settings = () => {
                   <li>O sistema está rodando localmente e os dados são armazenados no navegador</li>
                   <li>Fazer backup dos casos periodicamente é recomendado</li>
                   <li>As chaves de API são armazenadas apenas localmente</li>
+                  <li>Se não configurar uma chave de API, o sistema funcionará em modo de demonstração</li>
                 </ul>
               </div>
             </div>

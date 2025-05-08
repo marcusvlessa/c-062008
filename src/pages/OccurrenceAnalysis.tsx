@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Check, AlertCircle, Database, Search } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -51,6 +50,11 @@ const OccurrenceAnalysis = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files && e.target.files[0];
     if (selectedFile) {
+      // Log more information about the file
+      console.log('File selected:', selectedFile.name);
+      console.log('File type:', selectedFile.type);
+      console.log('File size:', selectedFile.size);
+      
       if (!['application/pdf', 'text/html', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(selectedFile.type)) {
         toast.error('Por favor, selecione um arquivo PDF, HTML, TXT ou DOCX');
         return;
@@ -62,6 +66,7 @@ const OccurrenceAnalysis = () => {
         // Extract text from PDF
         const extractedText = await parsePdfToText(selectedFile);
         console.log('Extracted text length:', extractedText.length);
+        console.log('First 100 chars:', extractedText.substring(0, 100));
         setFileContent(extractedText);
         toast.success(`Conteúdo extraído de: ${selectedFile.name}`);
         
@@ -88,6 +93,7 @@ const OccurrenceAnalysis = () => {
     }
 
     setIsLoading(true);
+    console.log('Starting analysis for file:', file.name);
     
     try {
       // First, check if we already have an analysis for this file in this case
@@ -96,6 +102,7 @@ const OccurrenceAnalysis = () => {
       
       if (existingOccurrence) {
         // Use existing analysis from DB
+        console.log('Using existing analysis from DB');
         setAnalysis(existingOccurrence.analysis);
         toast.success('Análise recuperada do banco de dados');
         setIsLoading(false);
@@ -104,6 +111,7 @@ const OccurrenceAnalysis = () => {
       
       // Convert content to CSV for storage
       const csvContent = convertTextToCSV(fileContent);
+      console.log('CSV content prepared, length:', csvContent.length);
       
       console.log('Starting AI analysis with content length:', fileContent.length);
       
@@ -127,9 +135,10 @@ const OccurrenceAnalysis = () => {
         }
       ];
       
-      console.log('Analyzing occurrence document with GROQ API');
+      console.log('Sending content for AI analysis');
       const aiAnalysis = await makeGroqAIRequest(messages, 2048);
       console.log('Analysis completed successfully, length:', aiAnalysis.length);
+      console.log('First 100 chars of analysis:', aiAnalysis.substring(0, 100));
       
       setAnalysis(aiAnalysis);
       
@@ -165,6 +174,7 @@ const OccurrenceAnalysis = () => {
     }
 
     try {
+      console.log('Saving analysis to case');
       // Save to database
       const csvContent = convertTextToCSV(fileContent);
       await saveOccurrenceData({
