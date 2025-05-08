@@ -58,8 +58,10 @@ const OccurrenceAnalysis = () => {
       
       setFile(selectedFile);
       try {
+        console.log('Starting PDF extraction for:', selectedFile.name);
         // Extract text from PDF
         const extractedText = await parsePdfToText(selectedFile);
+        console.log('Extracted text length:', extractedText.length);
         setFileContent(extractedText);
         toast.success(`Conteúdo extraído de: ${selectedFile.name}`);
         
@@ -69,7 +71,7 @@ const OccurrenceAnalysis = () => {
         }, 300);
       } catch (error) {
         console.error('Error parsing file:', error);
-        toast.error('Erro ao processar o arquivo');
+        toast.error('Erro ao processar o arquivo: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
       }
     }
   };
@@ -103,6 +105,8 @@ const OccurrenceAnalysis = () => {
       // Convert content to CSV for storage
       const csvContent = convertTextToCSV(fileContent);
       
+      console.log('Starting AI analysis with content length:', fileContent.length);
+      
       // Define GROQ API messages for analysis with improved prompt
       const messages = [
         {
@@ -125,7 +129,7 @@ const OccurrenceAnalysis = () => {
       
       console.log('Analyzing occurrence document with GROQ API');
       const aiAnalysis = await makeGroqAIRequest(messages, 2048);
-      console.log('Analysis completed successfully');
+      console.log('Analysis completed successfully, length:', aiAnalysis.length);
       
       setAnalysis(aiAnalysis);
       
@@ -148,7 +152,7 @@ const OccurrenceAnalysis = () => {
       toast.success('Análise concluída e salva no banco de dados');
     } catch (error) {
       console.error('Analysis error:', error);
-      toast.error('Erro ao realizar análise');
+      toast.error('Erro ao realizar análise: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
     } finally {
       setIsLoading(false);
     }
@@ -181,7 +185,7 @@ const OccurrenceAnalysis = () => {
       toast.success('Análise salva com sucesso no caso atual e no banco de dados');
     } catch (error) {
       console.error('Save error:', error);
-      toast.error('Erro ao salvar análise');
+      toast.error('Erro ao salvar análise: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
     }
   };
 

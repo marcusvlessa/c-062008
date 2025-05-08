@@ -48,7 +48,11 @@ const ImageAnalysis = () => {
   useEffect(() => {
     if (imageContainerRef.current) {
       const img = imageContainerRef.current.querySelector('img');
-      setImageElement(img as HTMLImageElement);
+      if (img) {
+        img.onload = () => {
+          setImageElement(img);
+        };
+      }
     }
   }, [image, activeTab]);
 
@@ -129,13 +133,19 @@ const ImageAnalysis = () => {
         return;
       }
       
+      console.log('Processing new image...');
+      
       // First, enhance the image with real image processing
       const enhancedImageUrl = await enhanceImageWithGroq(image.original);
+      console.log('Enhanced image successfully');
       
       // Then, analyze the enhanced image for text and objects
       const { ocrText, faces, licensePlates } = await analyzeImageWithGroq(enhancedImageUrl);
-      
-      console.log('Analysis results:', { ocrText, faces, licensePlates });
+      console.log('Analysis results:', { 
+        ocrTextLength: ocrText?.length,
+        facesCount: faces?.length,
+        licensePlatesCount: licensePlates?.length 
+      });
       
       // Create processed image object
       const processedImage: ProcessedImage = {
@@ -175,7 +185,7 @@ const ImageAnalysis = () => {
       toast.success('Imagem processada com sucesso e salva no banco de dados');
     } catch (error) {
       console.error('Image processing error:', error);
-      toast.error('Erro ao processar imagem');
+      toast.error('Erro ao processar imagem: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
     } finally {
       setIsProcessing(false);
     }
@@ -204,6 +214,8 @@ const ImageAnalysis = () => {
 
   const renderFaceBoxes = () => {
     if (!image?.faces || !image.faces.length || !showFaceBox) return null;
+    
+    console.log('Rendering face boxes for faces:', image.faces);
     
     return (
       <div className="absolute inset-0 pointer-events-none">
