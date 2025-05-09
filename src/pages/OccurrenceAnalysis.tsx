@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Check, AlertCircle, Database, Search } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -106,8 +107,8 @@ const OccurrenceAnalysis = () => {
     
     try {
       // First, check if we already have an analysis for this file in this case
-      const occurrences = await getOccurrencesByCaseId(currentCase.id);
-      const existingOccurrence = occurrences.find(o => o.filename === file.name);
+      const existingOccurrences = await getOccurrencesByCaseId(currentCase.id);
+      const existingOccurrence = existingOccurrences.find(o => o.filename === file.name);
       
       if (existingOccurrence) {
         // Use existing analysis from DB
@@ -177,9 +178,9 @@ const OccurrenceAnalysis = () => {
       // Save to localStorage
       const storageKey = `securai-occurrences`;
       const existingData = localStorage.getItem(storageKey);
-      const occurrences = existingData ? JSON.parse(existingData) : [];
-      occurrences.push(occurrenceData);
-      localStorage.setItem(storageKey, JSON.stringify(occurrences));
+      const savedOccurrences = existingData ? JSON.parse(existingData) : [];
+      savedOccurrences.push(occurrenceData);
+      localStorage.setItem(storageKey, JSON.stringify(savedOccurrences));
       
       // Also save to case context
       saveToCurrentCase({
@@ -277,20 +278,20 @@ ${hasRobbery ?
       // Save to localStorage
       const storageKey = `securai-occurrences`;
       const existingData = localStorage.getItem(storageKey);
-      const occurrences = existingData ? JSON.parse(existingData) : [];
+      const savedOccurrences = existingData ? JSON.parse(existingData) : [];
       
       // Replace if exists, otherwise add new
-      const existingIndex = occurrences.findIndex(
+      const existingIndex = savedOccurrences.findIndex(
         (o: any) => o.caseId === currentCase.id && o.filename === file.name
       );
       
       if (existingIndex >= 0) {
-        occurrences[existingIndex] = occurrenceData;
+        savedOccurrences[existingIndex] = occurrenceData;
       } else {
-        occurrences.push(occurrenceData);
+        savedOccurrences.push(occurrenceData);
       }
       
-      localStorage.setItem(storageKey, JSON.stringify(occurrences));
+      localStorage.setItem(storageKey, JSON.stringify(savedOccurrences));
       
       // Save to case context
       saveToCurrentCase({
