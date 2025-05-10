@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Check, AlertCircle, Database, Search, FileEdit } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -50,6 +49,7 @@ const OccurrenceAnalysis = () => {
     }
   };
 
+  // Handle file upload and analysis
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files && e.target.files[0];
     if (selectedFile) {

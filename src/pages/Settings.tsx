@@ -1,314 +1,329 @@
 
 import React, { useState, useEffect } from 'react';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Button } from '../components/ui/button';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, Key, Robot, Settings as SettingsIcon, Shield } from 'lucide-react';
-import { getApiSettings, saveApiSettings } from '../services/groqService';
-
-interface ApiForm {
-  groqApiKey: string;
-  groqApiEndpoint: string;
-  groqModel: string;
-  whisperModel: string;
-  whisperApiEndpoint: string;
-  language: string;
-}
+import { Key, Bot, Database, HardDrive, Globe, Languages, Lock } from 'lucide-react';
+import { getGroqSettings, saveGroqSettings, GroqSettings } from '../services/groqService';
 
 const Settings = () => {
-  const [apiForm, setApiForm] = useState<ApiForm>({
+  const [settings, setSettings] = useState<GroqSettings>({
     groqApiKey: '',
     groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-    groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    groqModel: 'meta-llama/llama-4-maverick-17b-128e-instruct',
     whisperModel: 'distil-whisper-large-v3',
     whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
     language: 'pt'
   });
   
-  const [darkMode, setDarkMode] = useState<boolean>(false);
-  const [showGroqKey, setShowGroqKey] = useState<boolean>(false);
-
-  // Load settings on component mount
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  const [isEncryption, setIsEncryption] = useState<boolean>(false);
+  const [localStorageSize, setLocalStorageSize] = useState<string>('0 KB');
+  
   useEffect(() => {
-    loadSettings();
-    checkDarkMode();
+    // Load settings on mount
+    const savedSettings = getGroqSettings();
+    setSettings(savedSettings);
+    
+    // Get current theme preference
+    const isDark = document.documentElement.classList.contains('dark');
+    setIsDarkMode(isDark);
+    
+    // Calculate localStorage usage
+    calculateLocalStorageSize();
   }, []);
-
-  // Check if dark mode is enabled
-  const checkDarkMode = () => {
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    setDarkMode(isDarkMode);
-  };
-
-  // Toggle dark mode
-  const handleDarkModeToggle = () => {
-    if (darkMode) {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    } else {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    }
-    setDarkMode(!darkMode);
-    toast.success(`Modo ${!darkMode ? 'escuro' : 'claro'} ativado`);
-  };
-
-  // Load API settings
-  const loadSettings = () => {
-    const settings = getApiSettings();
-    setApiForm(settings);
-  };
-
-  // Handle API form changes
-  const handleApiFormChange = (field: keyof ApiForm, value: string) => {
-    setApiForm(prev => ({ ...prev, [field]: value }));
-  };
-
-  // Save API settings
-  const handleApiSave = () => {
+  
+  const calculateLocalStorageSize = () => {
     try {
-      // Ensure required fields are filled
-      if (!apiForm.groqApiEndpoint || !apiForm.groqModel || !apiForm.whisperApiEndpoint || !apiForm.whisperModel) {
-        toast.error('Preencha todos os campos obrigatórios');
-        return;
+      let totalSize = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i) || '';
+        const value = localStorage.getItem(key) || '';
+        totalSize += key.length + value.length;
       }
       
-      saveApiSettings(apiForm);
-      toast.success('Configurações de API salvas com sucesso');
+      // Convert to KB or MB for display
+      const sizeInKB = totalSize / 1024;
+      if (sizeInKB < 1024) {
+        setLocalStorageSize(`${sizeInKB.toFixed(2)} KB`);
+      } else {
+        setLocalStorageSize(`${(sizeInKB / 1024).toFixed(2)} MB`);
+      }
     } catch (error) {
-      console.error('Error saving API settings:', error);
-      toast.error('Erro ao salvar configurações de API');
+      console.error('Error calculating localStorage size:', error);
+      setLocalStorageSize('Erro ao calcular');
     }
   };
-
-  const groqModels = [
-    { value: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout (17B)' },
-    { value: 'meta-llama/llama-4-scout-8b-16e-instruct', label: 'Llama 4 Scout (8B)' },
-    { value: 'meta-llama/llama-4-open-8b-16e-instruct', label: 'Llama 4 Open (8B)' },
-    { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
-    { value: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet' },
-    { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku' },
-    { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' }
-  ];
-
-  const whisperModels = [
-    { value: 'distil-whisper-large-v3', label: 'Distil Whisper (Large)' },
-    { value: 'distil-whisper-medium.en', label: 'Distil Whisper (Medium) - EN' },
-    { value: 'whisper-large-v3', label: 'Whisper (Large v3)' }
-  ];
-
-  const languages = [
-    { value: 'pt', label: 'Português' },
-    { value: 'en', label: 'English' },
-    { value: 'es', label: 'Español' },
-    { value: 'fr', label: 'Français' },
-    { value: 'de', label: 'Deutsch' },
-    { value: 'it', label: 'Italiano' },
-    { value: 'nl', label: 'Nederlands' },
-    { value: 'ja', label: 'Japanese' },
-    { value: 'zh', label: 'Chinese' },
-    { value: 'ru', label: 'Russian' }
-  ];
-
+  
+  const handleSettingsChange = (field: keyof GroqSettings, value: string) => {
+    setSettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+  
+  const handleSaveSettings = () => {
+    try {
+      saveGroqSettings(settings);
+      toast.success('Configurações salvas com sucesso');
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Erro ao salvar configurações');
+    }
+  };
+  
+  const handleToggleTheme = () => {
+    const newDarkMode = !isDarkMode;
+    setIsDarkMode(newDarkMode);
+    
+    if (newDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+    
+    toast.success(`Tema ${newDarkMode ? 'escuro' : 'claro'} ativado`);
+  };
+  
+  const handleToggleEncryption = () => {
+    setIsEncryption(!isEncryption);
+    toast.info('Funcionalidade de criptografia em desenvolvimento');
+  };
+  
+  const handleClearLocalStorage = () => {
+    if (window.confirm('Tem certeza que deseja limpar todos os dados locais? Esta ação não pode ser desfeita.')) {
+      try {
+        // Save API settings first
+        const apiSettings = getGroqSettings();
+        
+        // Clear all data
+        localStorage.clear();
+        
+        // Restore API settings
+        saveGroqSettings(apiSettings);
+        
+        toast.success('Todos os dados foram removidos com sucesso');
+        calculateLocalStorageSize();
+      } catch (error) {
+        console.error('Error clearing localStorage:', error);
+        toast.error('Erro ao limpar dados locais');
+      }
+    }
+  };
+  
+  const handleExportData = () => {
+    try {
+      const data = JSON.stringify(localStorage);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `securai-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      toast.success('Dados exportados com sucesso');
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      toast.error('Erro ao exportar dados');
+    }
+  };
+  
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
-          <SettingsIcon className="mr-2 h-6 w-6" /> Configurações
-        </h1>
-        <p className="text-gray-600 dark:text-gray-300">
-          Personalize as configurações de IA e aparência
-        </p>
-      </div>
-
-      <Tabs defaultValue="ai" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6">
-          <TabsTrigger value="ai" className="flex gap-2 items-center">
-            <Robot size={18} /> Modelos de IA
-          </TabsTrigger>
-          <TabsTrigger value="app" className="flex gap-2 items-center">
-            <Shield size={18} /> Aplicação
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="ai">
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Key size={18} /> Configurações de API
-              </CardTitle>
-              <CardDescription>
-                Configure suas chaves de API para utilizar os recursos de inteligência artificial
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="groq-api-key">Chave de API da Groq</Label>
-                <div className="relative">
-                  <Input
-                    id="groq-api-key"
-                    type={showGroqKey ? 'text' : 'password'}
-                    value={apiForm.groqApiKey}
-                    onChange={(e) => handleApiFormChange('groqApiKey', e.target.value)}
-                    placeholder="Adicione sua chave de API da Groq"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 px-3"
-                    onClick={() => setShowGroqKey(!showGroqKey)}
-                  >
-                    {showGroqKey ? 'Ocultar' : 'Mostrar'}
-                  </Button>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Obtenha sua chave em <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">console.groq.com/keys</a>
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="groq-model">Modelo Groq para Análise de Texto</Label>
-                <Select 
-                  value={apiForm.groqModel} 
-                  onValueChange={(value) => handleApiFormChange('groqModel', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um modelo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {groqModels.map(model => (
-                      <SelectItem key={model.value} value={model.value}>
-                        {model.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="whisper-model">Modelo para Transcrição de Áudio</Label>
-                <Select 
-                  value={apiForm.whisperModel} 
-                  onValueChange={(value) => handleApiFormChange('whisperModel', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um modelo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {whisperModels.map(model => (
-                      <SelectItem key={model.value} value={model.value}>
-                        {model.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="language">Idioma Padrão</Label>
-                <Select 
-                  value={apiForm.language} 
-                  onValueChange={(value) => handleApiFormChange('language', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um idioma" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {languages.map(lang => (
-                      <SelectItem key={lang.value} value={lang.value}>
-                        {lang.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="pt-4">
-                <Label className="text-base font-medium">Configurações Avançadas</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="groq-endpoint">Endpoint da API Groq</Label>
-                    <Input
-                      id="groq-endpoint"
-                      value={apiForm.groqApiEndpoint}
-                      onChange={(e) => handleApiFormChange('groqApiEndpoint', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="whisper-endpoint">Endpoint da API Whisper</Label>
-                    <Input
-                      id="whisper-endpoint"
-                      value={apiForm.whisperApiEndpoint}
-                      onChange={(e) => handleApiFormChange('whisperApiEndpoint', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              {!apiForm.groqApiKey && (
-                <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/30 rounded-md flex gap-2">
-                  <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-                  <p className="text-yellow-800 dark:text-yellow-200 text-sm">
-                    Sem uma chave de API configurada, o sistema utilizará dados simulados (mock) para demonstração.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button onClick={handleApiSave} className="ml-auto">
-                <Check className="mr-2 h-4 w-4" /> Salvar Configurações
-              </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="app">
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Aparência</CardTitle>
-              <CardDescription>
-                Personalize as configurações visuais da aplicação
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="dark-mode" className="flex items-center gap-2">
-                  Modo Escuro
-                </Label>
-                <Switch
-                  id="dark-mode"
-                  checked={darkMode}
-                  onCheckedChange={handleDarkModeToggle}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Sobre</CardTitle>
-              <CardDescription>
-                Informações sobre o sistema
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
+    <div className="container mx-auto p-6 space-y-6">
+      <h1 className="text-2xl font-bold mb-6">Configurações</h1>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* API Settings Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5" />
+              Configurações da API
+            </CardTitle>
+            <CardDescription>Configure sua conexão com a API GROQ para análise de IA</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="groqApiKey">Chave da API GROQ</Label>
+              <Input
+                id="groqApiKey" 
+                type="password"
+                value={settings.groqApiKey} 
+                onChange={(e) => handleSettingsChange('groqApiKey', e.target.value)}
+                placeholder="Insira sua chave da API GROQ"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="groqEndpoint">Endpoint da API</Label>
+              <Input
+                id="groqEndpoint" 
+                value={settings.groqApiEndpoint}
+                onChange={(e) => handleSettingsChange('groqApiEndpoint', e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="groqModel">Modelo de LLM</Label>
+              <Select 
+                value={settings.groqModel} 
+                onValueChange={(value) => handleSettingsChange('groqModel', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um modelo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Modelos da GROQ</SelectLabel>
+                    <SelectItem value="meta-llama/llama-4-maverick-17b-128e-instruct">Llama 4 Maverick 17B</SelectItem>
+                    <SelectItem value="llama3-8b-8192">Llama 3 8B</SelectItem>
+                    <SelectItem value="llama3-70b-8192">Llama 3 70B</SelectItem>
+                    <SelectItem value="mixtral-8x7b-32768">Mixtral 8x7B</SelectItem>
+                    <SelectItem value="gemma-7b-it">Gemma 7B</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="whisperModel">Modelo de Transcrição</Label>
+              <Select 
+                value={settings.whisperModel} 
+                onValueChange={(value) => handleSettingsChange('whisperModel', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um modelo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Modelos de Transcrição</SelectLabel>
+                    <SelectItem value="distil-whisper-large-v3">Whisper Large V3</SelectItem>
+                    <SelectItem value="whisper-medium">Whisper Medium</SelectItem>
+                    <SelectItem value="whisper-small">Whisper Small</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handleSaveSettings} className="w-full">Salvar Configurações</Button>
+          </CardFooter>
+        </Card>
+        
+        {/* System Settings Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5" />
+              Configurações do Sistema
+            </CardTitle>
+            <CardDescription>Personalize a experiência e aparência do sistema</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-medium">SecurAI</h3>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">Versão 1.0.0</p>
+                <p className="font-medium">Modo Escuro</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Alternar entre modo claro e escuro</p>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Sistema de análise inteligente de dados para investigação criminal usando inteligência artificial.
+              <Switch checked={isDarkMode} onCheckedChange={handleToggleTheme} />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Criptografia de Dados</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Ativar criptografia para dados sensíveis</p>
+              </div>
+              <Switch checked={isEncryption} onCheckedChange={handleToggleEncryption} />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="language">Idioma do Sistema</Label>
+              <Select
+                value={settings.language}
+                onValueChange={(value) => handleSettingsChange('language', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um idioma" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pt">Português (Brasil)</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="es">Español</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Data Management Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Gerenciamento de Dados
+            </CardTitle>
+            <CardDescription>Gerencie dados locais e exportações</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-gray-100 dark:bg-gray-800 rounded p-4 text-center">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Armazenamento local utilizado</p>
+              <p className="text-xl font-bold">{localStorageSize}</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <Button variant="outline" onClick={handleExportData}>Exportar Dados</Button>
+              <Button variant="destructive" onClick={handleClearLocalStorage}>Limpar Dados</Button>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <p className="text-xs text-gray-500 dark:text-gray-400 w-full text-center">
+              Todos os dados são armazenados apenas localmente no seu navegador
+            </p>
+          </CardFooter>
+        </Card>
+        
+        {/* About Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HardDrive className="h-5 w-5" />
+              Sobre o Sistema
+            </CardTitle>
+            <CardDescription>Informações sobre o SecurAI</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1">
+              <p className="font-medium">SecurAI - Sistema de Análise Investigativa com IA</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Versão 1.0.0</p>
+            </div>
+            
+            <div className="space-y-1">
+              <p className="font-medium">Tecnologias</p>
+              <ul className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                <li>• React + TypeScript</li>
+                <li>• API GROQ para processamento de IA</li>
+                <li>• Armazenamento local para privacidade</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-1">
+              <p className="font-medium">Desenvolvido por</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Equipe de Desenvolvimento SecurAI
               </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
