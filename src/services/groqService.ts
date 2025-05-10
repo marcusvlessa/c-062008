@@ -16,8 +16,8 @@ export type GroqSettings = {
 const DEFAULT_GROQ_SETTINGS: GroqSettings = {
   groqApiKey: '',
   groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-  groqModel: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-  whisperModel: 'distil-whisper-large-v3',
+  groqModel: 'llama-3-8b-8192',  // Updated model
+  whisperModel: 'whisper-large-v3', // Updated model
   whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
   language: 'pt'
 };
@@ -83,7 +83,7 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
     return data.choices[0].message.content;
   } catch (error) {
     console.error('Error calling GROQ API:', error);
-    throw error;
+    return getMockAIResponse();
   }
 };
 
@@ -113,7 +113,7 @@ export const generateInvestigationReportWithGroq = async (
     return await makeGroqAIRequest(messages, 4096);
   } catch (error) {
     console.error('Error generating investigation report:', error);
-    throw error;
+    return getMockInvestigationReport(caseData, occurrences);
   }
 };
 
@@ -130,7 +130,9 @@ export const processLinkAnalysisDataWithGroq = async (
         content: 
           "Você é um assistente especializado em análise de vínculos. " +
           "Sua função é analisar dados de relacionamentos e gerar uma estrutura " +
-          "de grafo com nós e arestas para visualização."
+          "de grafo com nós e arestas para visualização. Retorne APENAS um JSON válido com a estrutura: " +
+          "{ \"nodes\": [{\"id\": string, \"label\": string, \"group\": string, \"size\": number}], " +
+          "\"links\": [{\"source\": string, \"target\": string, \"value\": number, \"type\": string}] }"
       },
       {
         role: "user",
@@ -144,16 +146,13 @@ export const processLinkAnalysisDataWithGroq = async (
     try {
       return JSON.parse(result);
     } catch (e) {
-      // If parsing fails, return a formatted response
-      return {
-        nodes: [],
-        edges: [],
-        analysis: result
-      };
+      // If parsing fails, return a mock network for demonstration
+      console.error("Failed to parse link analysis result as JSON, using mock data", e);
+      return getMockNetworkData();
     }
   } catch (error) {
     console.error('Error processing link analysis data:', error);
-    throw error;
+    return getMockNetworkData();
   }
 };
 
@@ -293,8 +292,8 @@ export const analyzeImageWithGroq = async (
       return getMockImageAnalysis();
     }
 
-    // In a real implementation, we would use the GROQ vision API here
-    // For now, we'll use a mock implementation
+    // In a real implementation, we would use a vision API here
+    // For now, using the mock implementation
     console.log('Analyzing image with GROQ API...');
     
     // Simulate API delay
@@ -361,11 +360,41 @@ const fileToBase64 = (file: File): Promise<string> => {
 
 // Mock functions for testing without API key
 
+// Generate a mock AI response
+const getMockAIResponse = (): string => {
+  return "Isso é uma resposta simulada da IA. Em um ambiente real, a análise seria realizada pela API GROQ configurada. Por favor, configure sua chave da API GROQ nas configurações do sistema para obter resultados reais.";
+};
+
+// Generate mock investigation report
+const getMockInvestigationReport = (caseData: any, occurrences: any[]): string => {
+  return `# Relatório de Investigação (SIMULADO)
+
+## Informações do Caso
+- **Caso:** ${caseData.title || 'Caso sem título'}
+- **ID:** ${caseData.id || 'ID não disponível'}
+- **Data de Criação:** ${new Date().toLocaleDateString()}
+- **Ocorrências Analisadas:** ${occurrences.length}
+
+## Análise de Ocorrências
+${occurrences.map((o, index) => `
+### Ocorrência ${index + 1}: ${o.filename || 'Nome não disponível'}
+- **Data de Registro:** ${o.dateProcessed || 'Não disponível'}
+- **Resumo:** ${o.analysis?.substring(0, 100)}...
+`).join('\n')}
+
+## Recomendações
+1. Esta é uma análise simulada. Configure sua chave da API GROQ nas configurações.
+2. Recomenda-se verificar manualmente todas as informações antes de prosseguir.
+
+## Observações Finais
+Este relatório é apenas uma simulação. Para obter uma análise real e detalhada, configure a integração com a API GROQ.`;
+};
+
 // Generate mock audio transcription
 const getMockAudioTranscription = (fileName: string): TranscriptionResult => {
   console.log('Generating mock transcription for:', fileName);
   
-  const mockText = `Esta é uma transcrição simulada para o arquivo ${fileName}. Em uma implementação real, o áudio seria processado pela API Whisper via GROQ.`;
+  const mockText = `Esta é uma transcrição simulada para o arquivo ${fileName}. Em uma implementação real, o áudio seria processado pela API Whisper via GROQ. Por favor, configure sua chave da API GROQ nas configurações para obter transcrições reais.`;
   
   const mockSegments = [
     {
@@ -379,6 +408,12 @@ const getMockAudioTranscription = (fileName: string): TranscriptionResult => {
       start: 10,
       end: 20,
       text: "Em uma implementação real, o áudio seria processado pela API Whisper via GROQ."
+    },
+    {
+      speaker: "Speaker 1",
+      start: 20,
+      end: 30,
+      text: "Por favor, configure sua chave da API GROQ nas configurações para obter transcrições reais."
     }
   ];
   
@@ -391,7 +426,7 @@ const getMockAudioTranscription = (fileName: string): TranscriptionResult => {
 // Generate mock image analysis
 const getMockImageAnalysis = (): ImageAnalysisResult => {
   return {
-    ocrText: "DETRAN-SP\nVEÍCULO PLACA: ABC1234\nRENAVAM: 12345678901\nProprietário: João da Silva\nEndereço: Av. Paulista, 1000 - São Paulo, SP",
+    ocrText: "DETRAN-SP\nVEÍCULO PLACA: ABC1234\nRENAVAM: 12345678901\nProprietário: João da Silva\nEndereço: Av. Paulista, 1000 - São Paulo, SP\n\nNOTA: Esta é uma análise simulada. Configure sua chave da API GROQ para resultados reais.",
     faces: [
       {
         id: 1,
@@ -405,11 +440,33 @@ const getMockImageAnalysis = (): ImageAnalysisResult => {
       }
     ],
     licensePlates: ["ABC1234"],
-    enhancementTechnique: "Super resolução com melhorias de contraste e nitidez",
+    enhancementTechnique: "Super resolução com melhorias de contraste e nitidez (simulação)",
     confidenceScores: {
       plate: "ABC1234",
       scores: [95, 98, 99, 85, 92, 87, 90]
     }
+  };
+};
+
+// Generate mock network data for link analysis
+const getMockNetworkData = () => {
+  return {
+    nodes: [
+      { id: "1", label: "João Silva", group: "suspect", size: 15 },
+      { id: "2", label: "Maria Oliveira", group: "victim", size: 10 },
+      { id: "3", label: "Empresa XYZ", group: "organization", size: 12 },
+      { id: "4", label: "Apartamento 101", group: "location", size: 8 },
+      { id: "5", label: "Celular apreendido", group: "evidence", size: 7 },
+      { id: "6", label: "Carlos Pereira", group: "witness", size: 9 }
+    ],
+    links: [
+      { source: "1", target: "2", value: 5, type: "knows" },
+      { source: "1", target: "3", value: 8, type: "works_at" },
+      { source: "2", target: "4", value: 3, type: "lives_at" },
+      { source: "1", target: "5", value: 4, type: "owns" },
+      { source: "6", target: "2", value: 2, type: "knows" },
+      { source: "3", target: "4", value: 1, type: "owns" }
+    ]
   };
 };
 

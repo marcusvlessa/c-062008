@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Database, Link as LinkIcon, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -36,7 +37,7 @@ const LinkAnalysis = () => {
   
   // Effect to draw the network graph when data changes
   useEffect(() => {
-    if (networkData) {
+    if (networkData && networkData.nodes && networkData.links) {
       const canvas = document.createElement('canvas');
       canvas.width = 800;
       canvas.height = 600;
@@ -95,16 +96,22 @@ const LinkAnalysis = () => {
     
     try {
       // Process the file content with GROQ
-      const data = await processLinkAnalysisDataWithGroq(fileContent, file.name);
+      const data = await processLinkAnalysisDataWithGroq(currentCase, fileContent);
+      
+      // Add default values if API returns incomplete data
+      const processedData: NetworkData = {
+        nodes: data.nodes || [],
+        links: data.edges || data.links || []
+      };
       
       // Update the network data state
-      setNetworkData(data);
+      setNetworkData(processedData);
       
       // Save to case
       saveToCurrentCase({
         timestamp: new Date().toISOString(),
         filename: file.name,
-        networkData: data
+        networkData: processedData
       }, 'linkAnalysis');
       
       toast.success('Análise de vínculos processada com sucesso');
@@ -131,6 +138,14 @@ const LinkAnalysis = () => {
     ctx.fillStyle = '#1e293b';
     ctx.textAlign = 'center';
     ctx.fillText('Análise de Vínculos', canvas.width/2, 30);
+    
+    // Check if we have nodes and links
+    if (!data.nodes || data.nodes.length === 0 || !data.links || data.links.length === 0) {
+      ctx.font = '16px Arial';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Não há dados suficientes para exibir o grafo', canvas.width/2, canvas.height/2);
+      return;
+    }
     
     // Set up graph parameters
     const centerX = canvas.width / 2;

@@ -55,8 +55,8 @@ const ManualOccurrenceInput = ({
       
       console.log('Sending manual text for AI analysis');
       
-      // Call the AI service
-      const aiAnalysis = await makeGroqAIRequest(messages, 2048);
+      // Call the AI service with a longer token limit for detailed analysis
+      const aiAnalysis = await makeGroqAIRequest(messages, 4096);
       
       console.log('Analysis completed successfully');
       
@@ -67,6 +67,25 @@ const ManualOccurrenceInput = ({
     } catch (error) {
       console.error('Analysis error:', error);
       toast.error('Erro ao realizar análise: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+      
+      // Provide a fallback analysis message
+      const fallbackAnalysis = `
+# Análise do Boletim de Ocorrência (FALLBACK)
+
+**Nota: Ocorreu um erro ao processar a análise completa. Este é um relatório simplificado.**
+
+## Resumo do Incidente
+Não foi possível processar o conteúdo do boletim de ocorrência devido a um erro técnico.
+
+## Recomendações
+- Verifique se a chave da API GROQ está configurada corretamente
+- Tente novamente mais tarde
+- Se o problema persistir, entre em contato com o suporte
+
+*Este é um relatório de fallback gerado automaticamente quando ocorre um erro de processamento.*
+`;
+      
+      onAnalysisComplete(fallbackAnalysis);
     } finally {
       setIsProcessing(false);
     }
@@ -130,6 +149,12 @@ const ManualOccurrenceInput = ({
                 </div>
               }
             </Button>
+            <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                Para analisar ocorrências reais com a IA, configure sua chave da API GROQ na aba de Configurações.
+                Sem uma chave configurada, o sistema utilizará respostas simuladas.
+              </p>
+            </div>
           </TabsContent>
           
           <TabsContent value="upload">
