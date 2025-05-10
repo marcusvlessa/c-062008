@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, Image as ImageIcon, Search, Scan, AlertCircle, Database, Maximize2, ImagePlus, Car, Eye, EyeOff, Tag } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -10,7 +9,9 @@ import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
 import { 
   analyzeImageWithGroq, 
-  enhanceImageWithGroq
+  enhanceImageWithGroq,
+  ImageAnalysisResult,
+  ImageEnhancementResult
 } from '../services/groqService';
 import { saveImageAnalysis, getImageAnalysesByCaseId } from '../services/databaseService';
 
@@ -163,27 +164,27 @@ const ImageAnalysis = () => {
       console.log('Processing new image...');
       
       // First, enhance the image with real image processing
-      const enhancedImageUrl = await enhanceImageWithGroq(image.original);
+      const enhancementResult: ImageEnhancementResult = await enhanceImageWithGroq(image.original);
       console.log('Enhanced image successfully');
       
       // Then, analyze the enhanced image for text and objects
-      const { ocrText, faces, licensePlates, enhancementTechnique, confidenceScores } = await analyzeImageWithGroq(enhancedImageUrl);
+      const analysisResult: ImageAnalysisResult = await analyzeImageWithGroq(enhancementResult.enhancedImageUrl);
       console.log('Analysis results:', { 
-        ocrTextLength: ocrText?.length,
-        facesCount: faces?.length,
-        licensePlatesCount: licensePlates?.length,
-        enhancementTechnique
+        ocrTextLength: analysisResult.ocrText?.length,
+        facesCount: analysisResult.faces?.length,
+        licensePlatesCount: analysisResult.licensePlates?.length,
+        enhancementTechnique: analysisResult.enhancementTechnique
       });
       
       // Create processed image object
       const processedImage: ProcessedImage = {
         ...image,
-        enhanced: enhancedImageUrl,
-        ocrText,
-        faces,
-        licensePlates,
-        enhancementTechnique,
-        confidenceScores
+        enhanced: enhancementResult.enhancedImageUrl,
+        ocrText: analysisResult.ocrText,
+        faces: analysisResult.faces,
+        licensePlates: analysisResult.licensePlates,
+        enhancementTechnique: enhancementResult.enhancementTechnique,
+        confidenceScores: analysisResult.confidenceScores
       };
       
       setImage(processedImage);
@@ -193,12 +194,12 @@ const ImageAnalysis = () => {
       await saveImageAnalysis({
         caseId: currentCase.id,
         filename: image.name,
-        dataUrl: enhancedImageUrl,
-        ocrText,
-        faces,
-        licensePlates,
-        enhancementTechnique,
-        confidenceScores,
+        dataUrl: enhancementResult.enhancedImageUrl,
+        ocrText: analysisResult.ocrText,
+        faces: analysisResult.faces,
+        licensePlates: analysisResult.licensePlates,
+        enhancementTechnique: enhancementResult.enhancementTechnique,
+        confidenceScores: analysisResult.confidenceScores,
         dateProcessed: new Date().toISOString()
       });
       
@@ -207,11 +208,11 @@ const ImageAnalysis = () => {
         timestamp: new Date().toISOString(),
         imageName: image.name,
         processingResults: {
-          hasOcr: ocrText && ocrText.length > 0,
+          hasOcr: analysisResult.ocrText && analysisResult.ocrText.length > 0,
           ocrText: processedImage.ocrText,
           facesDetected: (processedImage.faces?.length || 0),
           licensePlatesDetected: (processedImage.licensePlates?.length || 0),
-          enhancementTechnique
+          enhancementTechnique: enhancementResult.enhancementTechnique
         }
       }, 'imageAnalysis');
       
