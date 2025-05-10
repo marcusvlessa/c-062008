@@ -4,9 +4,11 @@ import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { toast } from 'sonner';
-import { Clipboard, Pencil, Send, AlertTriangle } from 'lucide-react';
+import { Clipboard, Pencil, Send, AlertTriangle, Upload, Check } from 'lucide-react';
 import { makeGroqAIRequest, getGroqSettings } from '../services/groqService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { parsePdfToText } from '../services/databaseService';
+import { Input } from './ui/input';
 
 interface ManualOccurrenceInputProps {
   onAnalysisComplete: (analysis: string) => void;
@@ -22,12 +24,20 @@ const ManualOccurrenceInput = ({
   const [manualText, setManualText] = useState<string>('');
   const [activeTab, setActiveTab] = useState<string>('manual');
   const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [fileContent, setFileContent] = useState<string>('');
 
   // Check if API key is configured on component mount
   useEffect(() => {
-    const settings = getGroqSettings();
-    setHasApiKey(!!settings.groqApiKey);
+    checkApiKey();
   }, []);
+
+  const checkApiKey = () => {
+    const settings = getGroqSettings();
+    const hasKey = !!settings.groqApiKey && settings.groqApiKey.trim() !== '';
+    console.log("API key check:", hasKey ? "Available" : "Not available");
+    setHasApiKey(hasKey);
+  };
 
   const handleAnalyzeManualText = async () => {
     if (!manualText.trim()) {
@@ -62,15 +72,26 @@ const ManualOccurrenceInput = ({
       
       console.log('Sending manual text for AI analysis, API key available:', hasApiKey);
       
-      // Force using the actual API if we have an API key
+      let aiAnalysis = '';
+      
+      // Get GROQ API settings
       const settings = getGroqSettings();
-      if (!settings.groqApiKey) {
+      
+      // Check if API key is actually set
+      if (!settings.groqApiKey || settings.groqApiKey.trim() === '') {
         console.warn('No GROQ API key configured, will use mock response');
         throw new Error('API key not configured');
       }
       
-      // Call the AI service with a longer token limit for detailed analysis
-      const aiAnalysis = await makeGroqAIRequest(messages, 4096);
+      // Double check that we have a valid key
+      if (hasApiKey) {
+        console.log('Making actual AI request to GROQ API');
+        // Call the AI service with a longer token limit for detailed analysis
+        aiAnalysis = await makeGroqAIRequest(messages, 4096);
+      } else {
+        console.warn('API key not available, using mock response');
+        throw new Error('API key not available');
+      }
       
       console.log('Analysis completed successfully');
       
@@ -116,6 +137,44 @@ Não foi possível processar o conteúdo do boletim de ocorrência devido a um e
     }
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files && e.target.files[0];
+    if (selectedFile) {
+      console.log('File selected:', selectedFile.name);
+      console.log('File type:', selectedFile.type);
+      console.log('File size:', selectedFile.size);
+      
+      if (!['application/pdf', 'text/html', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(selectedFile.type)) {
+        toast.error('Por favor, selecione um arquivo PDF, HTML, TXT ou DOCX');
+        return;
+      }
+      
+      setFile(selectedFile);
+      setManualText(''); // Clear manual text when uploading
+      
+      try {
+        console.log('Extracting text from file:', selectedFile.name);
+        // Extract text from file
+        const extractedText = await parsePdfToText(selectedFile);
+        console.log('Extracted text length:', extractedText.length);
+        console.log('First 100 chars:', extractedText.substring(0, 100));
+        
+        if (!extractedText || extractedText.trim().length === 0) {
+          toast.error('Não foi possível extrair texto do arquivo. Tente outro arquivo.');
+          return;
+        }
+        
+        setFileContent(extractedText);
+        setManualText(extractedText); // Also set in manual text for analysis
+        setActiveTab('manual'); // Switch to manual tab
+        toast.success(`Conteúdo extraído de: ${selectedFile.name}`);
+      } catch (error) {
+        console.error('Error parsing file:', error);
+        toast.error('Erro ao processar o arquivo: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+      }
+    }
+  };
+
   return (
     <Card className="mb-6">
       <CardHeader>
@@ -132,6 +191,39 @@ Não foi possível processar o conteúdo do boletim de ocorrência devido a um e
             <TabsTrigger value="upload">Upload de Arquivo</TabsTrigger>
             <TabsTrigger value="manual">Entrada Manual</TabsTrigger>
           </TabsList>
+          
+          <TabsContent value="upload" className="space-y-4 mt-4">
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 text-center">
+              <Input
+                type="file"
+                id="file-upload"
+                className="hidden"
+                accept=".pdf,.html,.txt,.docx"
+                onChange={handleFileChange}
+              />
+              <label 
+                htmlFor="file-upload" 
+                className="cursor-pointer flex flex-col items-center justify-center"
+              >
+                <Upload className="h-10 w-10 text-gray-400 mb-2" />
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Arraste um arquivo PDF, HTML, TXT ou DOCX aqui ou clique para fazer upload
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  Tamanho máximo: 10MB
+                </p>
+              </label>
+            </div>
+
+            {file && (
+              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md flex items-center gap-2">
+                <Check className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <span className="text-green-800 dark:text-green-300 text-sm">
+                  {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                </span>
+              </div>
+            )}
+          </TabsContent>
           
           <TabsContent value="manual" className="space-y-4 mt-4">
             <div className="flex justify-end mb-2">
@@ -180,10 +272,6 @@ Não foi possível processar o conteúdo do boletim de ocorrência devido a um e
                 </p>
               </div>
             )}
-          </TabsContent>
-          
-          <TabsContent value="upload">
-            {/* Este conteúdo será gerenciado pelo componente principal */}
           </TabsContent>
         </Tabs>
       </CardContent>

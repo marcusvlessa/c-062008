@@ -59,7 +59,7 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
   try {
     const settings = getGroqSettings();
     
-    if (!settings.groqApiKey) {
+    if (!settings.groqApiKey || settings.groqApiKey.trim() === '') {
       console.warn('No GROQ API key configured. Please add your API key in Settings.');
       throw new Error('API key not configured');
     }
@@ -80,8 +80,9 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`GROQ API error: ${error.error?.message || response.statusText}`);
+      const errorData = await response.json();
+      console.error('GROQ API error response:', errorData);
+      throw new Error(`GROQ API error: ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
@@ -488,4 +489,3 @@ export default {
   analyzeImageWithGroq,
   enhanceImageWithGroq
 };
-
