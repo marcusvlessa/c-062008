@@ -27,7 +27,12 @@ export const getGroqSettings = (): GroqSettings => {
   try {
     const storedSettings = localStorage.getItem('securai-api-settings');
     if (storedSettings) {
-      return JSON.parse(storedSettings) as GroqSettings;
+      const parsedSettings = JSON.parse(storedSettings) as GroqSettings;
+      console.log("Retrieved API key (truncated):", 
+        parsedSettings.groqApiKey ? 
+        parsedSettings.groqApiKey.substring(0, 4) + '...' : 
+        'Not set');
+      return parsedSettings;
     }
     return DEFAULT_GROQ_SETTINGS;
   } catch (error) {
@@ -56,7 +61,7 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
     
     if (!settings.groqApiKey) {
       console.warn('No GROQ API key configured. Please add your API key in Settings.');
-      return 'API key not configured. Please add your GROQ API key in Settings.';
+      throw new Error('API key not configured');
     }
 
     console.log(`Making GROQ API request with model: ${settings.groqModel}`);
@@ -80,10 +85,14 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
     }
 
     const data = await response.json();
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('Invalid response format from GROQ API');
+    }
+    
     return data.choices[0].message.content;
   } catch (error) {
     console.error('Error calling GROQ API:', error);
-    return getMockAIResponse();
+    throw error; // Re-throw to let caller handle it
   }
 };
 
@@ -176,7 +185,7 @@ export const transcribeAudioWithGroq = async (
     
     if (!settings.groqApiKey) {
       console.warn('No GROQ API key configured. Please add your API key in Settings.');
-      return getMockAudioTranscription(audioFile.name);
+      throw new Error('API key not configured');
     }
 
     console.log(`Transcribing audio with Whisper model: ${settings.whisperModel}`);
@@ -289,14 +298,25 @@ export const analyzeImageWithGroq = async (
     
     if (!settings.groqApiKey) {
       console.warn('No GROQ API key configured. Please add your API key in Settings.');
-      return getMockImageAnalysis();
+      throw new Error('API key not configured');
     }
 
-    // In a real implementation, we would use a vision API here
-    // For now, using the mock implementation
+    // Create a prompt for analyzing the image
+    const messages = [
+      {
+        role: "system",
+        content: "You are an assistant that analyzes images and extracts information. Please provide a detailed analysis of the image."
+      },
+      {
+        role: "user",
+        content: `This is a base64 encoded image: ${imageUrl.substring(0, 50)}... (truncated). Please analyze it and return information about any text, faces, and license plates in JSON format.`
+      }
+    ];
+
     console.log('Analyzing image with GROQ API...');
     
-    // Simulate API delay
+    // For now, we're still using mock implementation since GROQ doesn't support vision yet
+    // In a real implementation, you would use a vision API here
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     // Return mock analysis
@@ -322,10 +342,7 @@ export const enhanceImageWithGroq = async (
     
     if (!settings.groqApiKey) {
       console.warn('No GROQ API key configured. Please add your API key in Settings.');
-      return {
-        enhancedImageUrl: imageUrl,
-        enhancementTechnique: 'Simulação de aprimoramento (nenhuma API configurada)'
-      };
+      throw new Error('API key not configured');
     }
 
     // In a real implementation, this would call an image enhancement API
@@ -346,16 +363,6 @@ export const enhanceImageWithGroq = async (
       enhancementTechnique: 'Erro no processamento da imagem'
     };
   }
-};
-
-// Helper function to convert file to base64
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
-  });
 };
 
 // Mock functions for testing without API key
@@ -481,3 +488,4 @@ export default {
   analyzeImageWithGroq,
   enhanceImageWithGroq
 };
+

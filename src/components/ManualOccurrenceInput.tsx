@@ -1,11 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { toast } from 'sonner';
-import { Clipboard, Pencil, Send } from 'lucide-react';
-import { makeGroqAIRequest } from '../services/groqService';
+import { Clipboard, Pencil, Send, AlertTriangle } from 'lucide-react';
+import { makeGroqAIRequest, getGroqSettings } from '../services/groqService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 interface ManualOccurrenceInputProps {
@@ -20,7 +20,14 @@ const ManualOccurrenceInput = ({
   setIsProcessing 
 }: ManualOccurrenceInputProps) => {
   const [manualText, setManualText] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<string>('upload');
+  const [activeTab, setActiveTab] = useState<string>('manual');
+  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+
+  // Check if API key is configured on component mount
+  useEffect(() => {
+    const settings = getGroqSettings();
+    setHasApiKey(!!settings.groqApiKey);
+  }, []);
 
   const handleAnalyzeManualText = async () => {
     if (!manualText.trim()) {
@@ -53,7 +60,14 @@ const ManualOccurrenceInput = ({
         }
       ];
       
-      console.log('Sending manual text for AI analysis');
+      console.log('Sending manual text for AI analysis, API key available:', hasApiKey);
+      
+      // Force using the actual API if we have an API key
+      const settings = getGroqSettings();
+      if (!settings.groqApiKey) {
+        console.warn('No GROQ API key configured, will use mock response');
+        throw new Error('API key not configured');
+      }
       
       // Call the AI service with a longer token limit for detailed analysis
       const aiAnalysis = await makeGroqAIRequest(messages, 4096);
@@ -149,12 +163,23 @@ Não foi possível processar o conteúdo do boletim de ocorrência devido a um e
                 </div>
               }
             </Button>
-            <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
-                Para analisar ocorrências reais com a IA, configure sua chave da API GROQ na aba de Configurações.
-                Sem uma chave configurada, o sistema utilizará respostas simuladas.
-              </p>
-            </div>
+            {!hasApiKey && (
+              <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                  <p className="text-yellow-800 dark:text-yellow-200">
+                    Chave da API GROQ não configurada. Por favor, configure sua chave na aba de Configurações.
+                  </p>
+                </div>
+              </div>
+            )}
+            {hasApiKey && (
+              <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
+                <p className="text-green-800 dark:text-green-200">
+                  Chave da API GROQ configurada. A análise será processada usando a API GROQ.
+                </p>
+              </div>
+            )}
           </TabsContent>
           
           <TabsContent value="upload">
