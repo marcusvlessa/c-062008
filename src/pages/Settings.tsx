@@ -169,6 +169,7 @@ const Settings = () => {
                 id="groqEndpoint" 
                 value={settings.groqApiEndpoint}
                 onChange={(e) => handleSettingsChange('groqApiEndpoint', e.target.value)}
+                placeholder="https://api.groq.com/openai/v1/chat/completions"
               />
             </div>
             
@@ -183,12 +184,28 @@ const Settings = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectLabel>Modelos da GROQ</SelectLabel>
-                    <SelectItem value="meta-llama/llama-4-maverick-17b-128e-instruct">Llama 4 Maverick 17B</SelectItem>
-                    <SelectItem value="llama3-8b-8192">Llama 3 8B</SelectItem>
+                    <SelectLabel>Modelos de Produção</SelectLabel>
+                    <SelectItem value="gemma2-9b-it">Gemma 2 9B</SelectItem>
+                    <SelectItem value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile</SelectItem>
+                    <SelectItem value="llama-3.1-8b-instant">Llama 3.1 8B Instant</SelectItem>
+                    <SelectItem value="llama-guard-3-8b">Llama Guard 3 8B</SelectItem>
                     <SelectItem value="llama3-70b-8192">Llama 3 70B</SelectItem>
-                    <SelectItem value="mixtral-8x7b-32768">Mixtral 8x7B</SelectItem>
-                    <SelectItem value="gemma-7b-it">Gemma 7B</SelectItem>
+                    <SelectItem value="llama3-8b-8192">Llama 3 8B</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Modelos de Preview</SelectLabel>
+                    <SelectItem value="allam-2-7b">Allam 2 7B</SelectItem>
+                    <SelectItem value="deepseek-r1-distill-llama-70b">DeepSeek R1 Distill Llama 70B</SelectItem>
+                    <SelectItem value="meta-llama/llama-4-maverick-17b-128e-instruct">Llama 4 Maverick 17B</SelectItem>
+                    <SelectItem value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B (Recomendado)</SelectItem>
+                    <SelectItem value="meta-llama/Llama-Guard-4-12B">Llama Guard 4 12B</SelectItem>
+                    <SelectItem value="mistral-saba-24b">Mistral Saba 24B</SelectItem>
+                    <SelectItem value="qwen-qwq-32b">Qwen QWQ 32B</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Sistemas de Preview</SelectLabel>
+                    <SelectItem value="compound-beta">Compound Beta</SelectItem>
+                    <SelectItem value="compound-beta-mini">Compound Beta Mini</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -206,12 +223,23 @@ const Settings = () => {
                 <SelectContent>
                   <SelectGroup>
                     <SelectLabel>Modelos de Transcrição</SelectLabel>
-                    <SelectItem value="distil-whisper-large-v3">Whisper Large V3</SelectItem>
-                    <SelectItem value="whisper-medium">Whisper Medium</SelectItem>
-                    <SelectItem value="whisper-small">Whisper Small</SelectItem>
+                    <SelectItem value="whisper-large-v3">Whisper Large V3</SelectItem>
+                    <SelectItem value="whisper-large-v3-turbo">Whisper Large V3 Turbo</SelectItem>
+                    <SelectItem value="distil-whisper-large-v3-en">Distil Whisper Large V3 EN</SelectItem>
+                    <SelectItem value="distil-whisper-large-v3">Distil Whisper Large V3</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="whisperEndpoint">Endpoint de Transcrição</Label>
+              <Input
+                id="whisperEndpoint" 
+                value={settings.whisperApiEndpoint}
+                onChange={(e) => handleSettingsChange('whisperApiEndpoint', e.target.value)}
+                placeholder="https://api.groq.com/openai/v1/audio/transcriptions"
+              />
             </div>
           </CardContent>
           <CardFooter>
@@ -313,6 +341,13 @@ const Settings = () => {
                 <li>• API GROQ para processamento de IA</li>
                 <li>• Armazenamento local para privacidade</li>
               </ul>
+            </div>
+            
+            <div className="space-y-1">
+              <p className="font-medium">Modelos Disponíveis</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Acesso a diversos modelos para processamento de texto e áudio através da API GROQ
+              </p>
             </div>
             
             <div className="space-y-1">

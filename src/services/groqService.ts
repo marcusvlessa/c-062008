@@ -16,7 +16,7 @@ export type GroqSettings = {
 const DEFAULT_GROQ_SETTINGS: GroqSettings = {
   groqApiKey: '',
   groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-  groqModel: 'llama-3-8b-8192',  // Updated model
+  groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',  // Default model updated
   whisperModel: 'whisper-large-v3', // Updated model
   whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
   language: 'pt'
@@ -60,11 +60,12 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
     const settings = getGroqSettings();
     
     if (!settings.groqApiKey || settings.groqApiKey.trim() === '') {
-      console.warn('No GROQ API key configured. Please add your API key in Settings.');
+      console.error('No GROQ API key configured. Please add your API key in Settings.');
       throw new Error('API key not configured');
     }
 
     console.log(`Making GROQ API request with model: ${settings.groqModel}`);
+    console.log('Request with messages:', JSON.stringify(messages.map(m => ({role: m.role, content: m.content.substring(0, 50) + '...'})), null, 2));
     
     const response = await fetch(settings.groqApiEndpoint, {
       method: 'POST',
@@ -80,12 +81,20 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('GROQ API error response:', errorData);
+      const errorText = await response.text();
+      console.error('GROQ API error response:', errorText);
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = { error: { message: errorText } };
+      }
       throw new Error(`GROQ API error: ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('Received response from GROQ API:', data);
+    
     if (!data.choices || !data.choices[0] || !data.choices[0].message) {
       throw new Error('Invalid response format from GROQ API');
     }
@@ -185,7 +194,7 @@ export const transcribeAudioWithGroq = async (
     const settings = getGroqSettings();
     
     if (!settings.groqApiKey) {
-      console.warn('No GROQ API key configured. Please add your API key in Settings.');
+      console.error('No GROQ API key configured. Please add your API key in Settings.');
       throw new Error('API key not configured');
     }
 
@@ -208,11 +217,19 @@ export const transcribeAudioWithGroq = async (
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Whisper API error: ${error.error?.message || response.statusText}`);
+      const errorText = await response.text();
+      console.error('GROQ Whisper API error response:', errorText);
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = { error: { message: errorText } };
+      }
+      throw new Error(`Whisper API error: ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('Whisper API response:', data);
     
     // Extract transcription
     const transcription = data.text;
@@ -298,15 +315,15 @@ export const analyzeImageWithGroq = async (
     const settings = getGroqSettings();
     
     if (!settings.groqApiKey) {
-      console.warn('No GROQ API key configured. Please add your API key in Settings.');
+      console.error('No GROQ API key configured. Please add your API key in Settings.');
       throw new Error('API key not configured');
     }
 
-    // Create a prompt for analyzing the image
+    // Create a prompt for analyzing the image using base64 truncated
     const messages = [
       {
         role: "system",
-        content: "You are an assistant that analyzes images and extracts information. Please provide a detailed analysis of the image."
+        content: "You are an assistant that analyzes images and extracts information. Please provide a detailed analysis of the image in JSON format with fields: ocrText (extracted text), faces (array of detected faces), licensePlates (array of detected plate numbers), and any other relevant information."
       },
       {
         role: "user",
@@ -316,8 +333,7 @@ export const analyzeImageWithGroq = async (
 
     console.log('Analyzing image with GROQ API...');
     
-    // For now, we're still using mock implementation since GROQ doesn't support vision yet
-    // In a real implementation, you would use a vision API here
+    // For now, still using mock implementation until vision model support is added to GROQ
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     // Return mock analysis
@@ -342,7 +358,7 @@ export const enhanceImageWithGroq = async (
     const settings = getGroqSettings();
     
     if (!settings.groqApiKey) {
-      console.warn('No GROQ API key configured. Please add your API key in Settings.');
+      console.error('No GROQ API key configured. Please add your API key in Settings.');
       throw new Error('API key not configured');
     }
 

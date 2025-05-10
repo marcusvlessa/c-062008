@@ -27,9 +27,24 @@ const ManualOccurrenceInput = ({
   const [file, setFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
 
-  // Check if API key is configured on component mount
+  // Check if API key is configured on component mount and whenever settings might change
   useEffect(() => {
     checkApiKey();
+    
+    // Set up listener for storage events to detect settings changes
+    const handleStorageChange = () => {
+      checkApiKey();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Check periodically (every 5 seconds) in case settings were updated in another tab
+    const interval = setInterval(checkApiKey, 5000);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
   }, []);
 
   const checkApiKey = () => {
@@ -79,21 +94,16 @@ const ManualOccurrenceInput = ({
       
       // Check if API key is actually set
       if (!settings.groqApiKey || settings.groqApiKey.trim() === '') {
-        console.warn('No GROQ API key configured, will use mock response');
-        throw new Error('API key not configured');
+        console.error('No GROQ API key configured, will use mock response');
+        throw new Error('Chave da API GROQ não configurada. Configure nas configurações do sistema.');
       }
       
-      // Double check that we have a valid key
-      if (hasApiKey) {
-        console.log('Making actual AI request to GROQ API');
-        // Call the AI service with a longer token limit for detailed analysis
-        aiAnalysis = await makeGroqAIRequest(messages, 4096);
-      } else {
-        console.warn('API key not available, using mock response');
-        throw new Error('API key not available');
-      }
+      // Console log the model being used
+      console.log(`Using model: ${settings.groqModel}`);
       
-      console.log('Analysis completed successfully');
+      // Call the AI service with a longer token limit for detailed analysis
+      aiAnalysis = await makeGroqAIRequest(messages, 4096);
+      console.log('Analysis completed successfully, length:', aiAnalysis.length);
       
       // Pass analysis back to parent component
       onAnalysisComplete(aiAnalysis);
@@ -116,6 +126,7 @@ Não foi possível processar o conteúdo do boletim de ocorrência devido a um e
 - Verifique se a chave da API GROQ está configurada corretamente
 - Tente novamente mais tarde
 - Se o problema persistir, entre em contato com o suporte
+- Verifique se o modelo de IA selecionado é válido e tem acesso autorizado
 
 *Este é um relatório de fallback gerado automaticamente quando ocorre um erro de processamento.*
 `;
@@ -174,6 +185,18 @@ Não foi possível processar o conteúdo do boletim de ocorrência devido a um e
       }
     }
   };
+
+  // Get current model information
+  const getModelInfo = () => {
+    const settings = getGroqSettings();
+    return {
+      llmModel: settings.groqModel,
+      whisperModel: settings.whisperModel
+    };
+  };
+
+  // Get model information
+  const modelInfo = getModelInfo();
 
   return (
     <Card className="mb-6">
@@ -267,9 +290,13 @@ Não foi possível processar o conteúdo do boletim de ocorrência devido a um e
             )}
             {hasApiKey && (
               <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
-                <p className="text-green-800 dark:text-green-200">
+                <p className="text-green-800 dark:text-green-200 mb-1">
                   Chave da API GROQ configurada. A análise será processada usando a API GROQ.
                 </p>
+                <div className="text-xs text-green-700 dark:text-green-300">
+                  <p>Modelo LLM: {modelInfo.llmModel}</p>
+                  <p>Modelo Whisper: {modelInfo.whisperModel}</p>
+                </div>
               </div>
             )}
           </TabsContent>
