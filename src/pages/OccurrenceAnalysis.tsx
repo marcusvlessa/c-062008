@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, FileText, Check, AlertCircle, Database, Search } from 'lucide-react';
+import { Upload, FileText, Check, AlertCircle, Database, Search, FileEdit } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -8,11 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
 import { makeGroqAIRequest } from '../services/groqService';
+import ManualOccurrenceInput from '../components/ManualOccurrenceInput';
 import { 
   parsePdfToText, 
   convertTextToCSV,
   saveOccurrenceData,
-  getOccurrencesByCaseId 
+  getOccurrencesByCaseId,
+  updateCaseCrimeTypes 
 } from '../services/databaseService';
 
 const OccurrenceAnalysis = () => {
@@ -36,11 +38,11 @@ const OccurrenceAnalysis = () => {
     
     try {
       setIsCheckingDb(true);
-      const occurrences = await getOccurrencesByCaseId(currentCase.id);
+      const existingOccurrences = await getOccurrencesByCaseId(currentCase.id);
       setIsCheckingDb(false);
       
-      if (occurrences.length > 0) {
-        toast.info(`${occurrences.length} análises encontradas no banco de dados para este caso`);
+      if (existingOccurrences.length > 0) {
+        toast.info(`${existingOccurrences.length} análises encontradas no banco de dados para este caso`);
       }
     } catch (error) {
       console.error('Error checking for existing analyses:', error);
@@ -166,6 +168,12 @@ const OccurrenceAnalysis = () => {
       
       setAnalysis(aiAnalysis);
       
+      // Extract crime types from analysis for statistics
+      const crimeTypes = extractCrimeTypes(aiAnalysis);
+      if (crimeTypes.length > 0) {
+        await updateCaseCrimeTypes(currentCase.id, crimeTypes);
+      }
+      
       // Save to database (implement mock storage with localStorage)
       const occurrenceData = {
         caseId: currentCase.id,
@@ -176,11 +184,7 @@ const OccurrenceAnalysis = () => {
       };
       
       // Save to localStorage
-      const storageKey = `securai-occurrences`;
-      const existingData = localStorage.getItem(storageKey);
-      const savedOccurrences = existingData ? JSON.parse(existingData) : [];
-      savedOccurrences.push(occurrenceData);
-      localStorage.setItem(storageKey, JSON.stringify(savedOccurrences));
+      await saveOccurrenceData(occurrenceData);
       
       // Also save to case context
       saveToCurrentCase({
@@ -195,6 +199,32 @@ const OccurrenceAnalysis = () => {
       toast.error('Erro ao realizar análise: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Extract crime types from analysis for statistics
+  const extractCrimeTypes = (analysisText: string): string[] => {
+    try {
+      // Look for crime types in the classification section
+      const classificationMatch = analysisText.match(/Classificação penal sugerida[:\n]+([\s\S]*?)(\n\n|\n##|$)/i);
+      if (!classificationMatch) return [];
+      
+      const classificationText = classificationMatch[1];
+      
+      // Common Brazilian crime types to look for
+      const commonCrimes = [
+        'Roubo', 'Furto', 'Homicídio', 'Lesão Corporal', 'Ameaça',
+        'Estelionato', 'Violência Doméstica', 'Tráfico', 'Receptação',
+        'Maria da Penha', 'Estupro', 'Abuso', 'Injúria', 'Difamação',
+        'Calúnia', 'Dano', 'Fraude'
+      ];
+      
+      return commonCrimes.filter(crime => 
+        classificationText.toLowerCase().includes(crime.toLowerCase())
+      );
+    } catch (error) {
+      console.error('Error extracting crime types:', error);
+      return [];
     }
   };
 
@@ -256,47 +286,53 @@ ${hasRobbery ?
   'Aguardando elementos para tipificação definitiva'}`;
   };
 
+  const handleManualAnalysisComplete = (analysisResult: string) => {
+    if (!currentCase) {
+      toast.error('Por favor, selecione um caso antes de prosseguir');
+      return;
+    }
+    
+    setAnalysis(analysisResult);
+    
+    // Extract crime types and update statistics
+    const crimeTypes = extractCrimeTypes(analysisResult);
+    if (crimeTypes.length > 0) {
+      updateCaseCrimeTypes(currentCase.id, crimeTypes);
+    }
+    
+    // Save to case context
+    saveToCurrentCase({
+      timestamp: new Date().toISOString(),
+      filename: 'Análise manual',
+      analysis: analysisResult
+    }, 'occurrenceAnalysis');
+  };
+
   const saveAnalysis = async () => {
-    if (!analysis || !currentCase || !file) {
+    if (!analysis || !currentCase) {
       toast.error('Não há análise para salvar ou nenhum caso selecionado');
       return;
     }
 
     try {
       console.log('Saving analysis to case');
-      // Save to local storage
-      const csvContent = convertTextToCSV(fileContent);
       
+      // Create occurrence data object
       const occurrenceData = {
         caseId: currentCase.id,
-        filename: file.name,
-        content: csvContent,
+        filename: file ? file.name : 'Análise manual',
+        content: file ? convertTextToCSV(fileContent) : convertTextToCSV(analysis),
         analysis: analysis,
         dateProcessed: new Date().toISOString()
       };
       
-      // Save to localStorage
-      const storageKey = `securai-occurrences`;
-      const existingData = localStorage.getItem(storageKey);
-      const savedOccurrences = existingData ? JSON.parse(existingData) : [];
-      
-      // Replace if exists, otherwise add new
-      const existingIndex = savedOccurrences.findIndex(
-        (o: any) => o.caseId === currentCase.id && o.filename === file.name
-      );
-      
-      if (existingIndex >= 0) {
-        savedOccurrences[existingIndex] = occurrenceData;
-      } else {
-        savedOccurrences.push(occurrenceData);
-      }
-      
-      localStorage.setItem(storageKey, JSON.stringify(savedOccurrences));
+      // Save to database
+      await saveOccurrenceData(occurrenceData);
       
       // Save to case context
       saveToCurrentCase({
         timestamp: new Date().toISOString(),
-        filename: file.name || 'Análise manual',
+        filename: file ? file.name : 'Análise manual',
         analysis: analysis
       }, 'occurrenceAnalysis');
       
@@ -311,10 +347,10 @@ ${hasRobbery ?
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
-          <Search className="mr-2 h-6 w-6" /> Análise de Ocorrência
+          <FileEdit className="mr-2 h-6 w-6" /> Análise de Ocorrência
         </h1>
-        <p className="text-gray-600 dark:text-gray-300">
-          Faça upload de documentos de ocorrências para análise com IA e sugestões
+        <p className="text-gray-600 dark:text-gray-300 mt-1">
+          Faça upload de documentos ou digite ocorrências para análise com IA e sugestões
         </p>
       </div>
 
@@ -332,6 +368,12 @@ ${hasRobbery ?
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-6">
+            <ManualOccurrenceInput 
+              onAnalysisComplete={handleManualAnalysisComplete}
+              isProcessing={isLoading}
+              setIsProcessing={setIsLoading}
+            />
+            
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -380,7 +422,7 @@ ${hasRobbery ?
                     disabled={!file || isLoading || isCheckingDb}
                     className="w-full"
                   >
-                    {isLoading ? 'Analisando com IA...' : isCheckingDb ? 'Verificando BD...' : 'Analisar Ocorrência'}
+                    {isLoading ? 'Analisando com IA...' : isCheckingDb ? 'Verificando BD...' : 'Analisar Documento'}
                   </Button>
                 </div>
               </CardContent>
@@ -392,7 +434,7 @@ ${hasRobbery ?
                   <CardTitle>Conteúdo do Documento</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md h-64 overflow-y-auto">
+                  <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md max-h-64 overflow-y-auto">
                     <pre className="whitespace-pre-wrap text-sm">{fileContent}</pre>
                   </div>
                 </CardContent>
@@ -401,7 +443,7 @@ ${hasRobbery ?
           </div>
 
           <div>
-            <Card>
+            <Card className="sticky top-6">
               <CardHeader>
                 <CardTitle className="flex justify-between items-center">
                   <span>Análise e Sugestões</span>
@@ -423,7 +465,7 @@ ${hasRobbery ?
                 ) : analysis ? (
                   <div className="prose dark:prose-invert max-w-none">
                     <Textarea
-                      className="min-h-[400px] font-mono"
+                      className="min-h-[500px] font-mono text-sm"
                       value={analysis}
                       onChange={(e) => setAnalysis(e.target.value)}
                     />
@@ -431,7 +473,7 @@ ${hasRobbery ?
                 ) : (
                   <div className="flex flex-col items-center justify-center p-8 text-gray-500 dark:text-gray-400">
                     <FileText className="h-16 w-16 opacity-20 mb-4" />
-                    <p>Faça upload de um documento para gerar análise e sugestões</p>
+                    <p>Faça upload de um documento ou digite texto para gerar análise e sugestões</p>
                   </div>
                 )}
               </CardContent>

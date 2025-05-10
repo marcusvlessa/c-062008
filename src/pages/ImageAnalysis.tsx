@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Image as ImageIcon, Search, Scan, AlertCircle, Database, Maximize2 } from 'lucide-react';
+import { Upload, Image as ImageIcon, Search, Scan, AlertCircle, Database, Maximize2, ImagePlus, Car, Eye, EyeOff, Tag } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
 import { 
@@ -25,6 +26,11 @@ interface ProcessedImage {
     region: { x: number; y: number; width: number; height: number };
   }[];
   licensePlates?: string[];
+  enhancementTechnique?: string;
+  confidenceScores?: {
+    plate: string;
+    scores: number[];
+  };
 }
 
 const ImageAnalysis = () => {
@@ -34,8 +40,10 @@ const ImageAnalysis = () => {
   const [activeTab, setActiveTab] = useState<string>('original');
   const [isCheckingDb, setIsCheckingDb] = useState<boolean>(false);
   const [showFaceBox, setShowFaceBox] = useState<boolean>(true);
+  const [showPlateBox, setShowPlateBox] = useState<boolean>(true);
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const [imageElement, setImageElement] = useState<HTMLImageElement | null>(null);
+  const [plateAlternatives, setPlateAlternatives] = useState<string[]>([]);
 
   // Check for existing analyses in the database when case changes
   useEffect(() => {
@@ -55,6 +63,23 @@ const ImageAnalysis = () => {
       }
     }
   }, [image, activeTab]);
+
+  // Generate plate alternatives when confidence is low
+  useEffect(() => {
+    if (image?.confidenceScores && image.licensePlates && image.licensePlates.length > 0) {
+      const plate = image.confidenceScores.plate;
+      const scores = image.confidenceScores.scores;
+      
+      // Only generate alternatives if some characters have low confidence
+      if (scores.some(score => score < 90)) {
+        generatePlateAlternatives(plate, scores);
+      } else {
+        setPlateAlternatives([]);
+      }
+    } else {
+      setPlateAlternatives([]);
+    }
+  }, [image?.confidenceScores]);
 
   const checkForExistingAnalyses = async () => {
     if (!currentCase) return;
@@ -123,7 +148,9 @@ const ImageAnalysis = () => {
           enhanced: existingAnalysis.dataUrl,
           ocrText: existingAnalysis.ocrText || '',
           faces: existingAnalysis.faces || [],
-          licensePlates: existingAnalysis.licensePlates || []
+          licensePlates: existingAnalysis.licensePlates || [],
+          enhancementTechnique: existingAnalysis.enhancementTechnique || '',
+          confidenceScores: existingAnalysis.confidenceScores
         };
         
         setImage(processedImage);
@@ -140,11 +167,12 @@ const ImageAnalysis = () => {
       console.log('Enhanced image successfully');
       
       // Then, analyze the enhanced image for text and objects
-      const { ocrText, faces, licensePlates } = await analyzeImageWithGroq(enhancedImageUrl);
+      const { ocrText, faces, licensePlates, enhancementTechnique, confidenceScores } = await analyzeImageWithGroq(enhancedImageUrl);
       console.log('Analysis results:', { 
         ocrTextLength: ocrText?.length,
         facesCount: faces?.length,
-        licensePlatesCount: licensePlates?.length 
+        licensePlatesCount: licensePlates?.length,
+        enhancementTechnique
       });
       
       // Create processed image object
@@ -153,7 +181,9 @@ const ImageAnalysis = () => {
         enhanced: enhancedImageUrl,
         ocrText,
         faces,
-        licensePlates
+        licensePlates,
+        enhancementTechnique,
+        confidenceScores
       };
       
       setImage(processedImage);
@@ -167,6 +197,8 @@ const ImageAnalysis = () => {
         ocrText,
         faces,
         licensePlates,
+        enhancementTechnique,
+        confidenceScores,
         dateProcessed: new Date().toISOString()
       });
       
@@ -178,7 +210,8 @@ const ImageAnalysis = () => {
           hasOcr: ocrText && ocrText.length > 0,
           ocrText: processedImage.ocrText,
           facesDetected: (processedImage.faces?.length || 0),
-          licensePlatesDetected: (processedImage.licensePlates?.length || 0)
+          licensePlatesDetected: (processedImage.licensePlates?.length || 0),
+          enhancementTechnique
         }
       }, 'imageAnalysis');
       
@@ -189,6 +222,74 @@ const ImageAnalysis = () => {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Generate possible plate alternatives when confidence is low
+  const generatePlateAlternatives = (plate: string, confidenceScores: number[]) => {
+    // Only generate alternatives for scores below 90%
+    const lowConfidenceIndices = confidenceScores
+      .map((score, index) => ({ score, index }))
+      .filter(item => item.score < 90);
+    
+    if (lowConfidenceIndices.length === 0) {
+      setPlateAlternatives([]);
+      return;
+    }
+    
+    // For Brazilian plates (old format: ABC1234, new format: ABC1D23)
+    // Character sets for each position
+    const charSets = {
+      letter: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+      number: '0123456789'
+    };
+    
+    // Determine if each position should be a letter or number based on Brazilian plate formats
+    const getPositionType = (position: number, plateLength: number) => {
+      // Old format (ABC1234)
+      if (plateLength === 7) {
+        return position < 3 ? 'letter' : 'number';
+      }
+      // New format (ABC1D23)
+      else if (plateLength === 7) {
+        if (position < 3) return 'letter';
+        else if (position === 3) return 'number';
+        else if (position === 4) return 'letter';
+        else return 'number';
+      }
+      
+      // Default case
+      return position < 3 ? 'letter' : 'number';
+    };
+    
+    // Start with the original plate
+    const alternatives = new Set<string>();
+    
+    // Limit to a reasonable number of combinations
+    const maxCombinations = 10;
+    let combinationCount = 0;
+    
+    // Simple function to generate alternatives by replacing low confidence characters
+    const generateCombination = (currentPlate: string, index: number) => {
+      if (combinationCount >= maxCombinations) return;
+      
+      const positionType = getPositionType(index, plate.length);
+      const charSet = charSets[positionType];
+      
+      for (let char of charSet) {
+        const newPlate = currentPlate.substring(0, index) + char + currentPlate.substring(index + 1);
+        alternatives.add(newPlate);
+        combinationCount++;
+        
+        if (combinationCount >= maxCombinations) break;
+      }
+    };
+    
+    // Generate alternatives for each low confidence position
+    lowConfidenceIndices.forEach(({ index }) => {
+      generateCombination(plate, index);
+    });
+    
+    setPlateAlternatives(Array.from(alternatives));
   };
 
   // Function to calibrate face box positions based on current image display size
@@ -243,11 +344,32 @@ const ImageAnalysis = () => {
     );
   };
 
+  // Render license plate boxes (simplified version, in real app would need proper positioning)
+  const renderPlateBoxes = () => {
+    if (!image?.licensePlates || !image.licensePlates.length || !showPlateBox) return null;
+    
+    // This is a simplified version - in a real implementation, we would need coordinates
+    // Here we'll just add markers on the bottom of the image
+    return (
+      <div className="absolute bottom-2 left-2 pointer-events-none">
+        {image.licensePlates.map((plate, idx) => (
+          <div
+            key={idx}
+            className="bg-blue-600 text-white px-3 py-1 text-sm font-medium rounded mb-1 flex items-center gap-2"
+          >
+            <Car className="h-4 w-4" />
+            <span>Placa: {plate}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
-          <ImageIcon className="mr-2 h-6 w-6" /> Análise de Imagem
+          <ImagePlus className="mr-2 h-6 w-6" /> Análise de Imagem
         </h1>
         <p className="text-gray-600 dark:text-gray-300">
           Aprimore imagens, execute OCR e reconhecimento facial
@@ -336,17 +458,41 @@ const ImageAnalysis = () => {
                   
                   {image.licensePlates && image.licensePlates.length > 0 && (
                     <div className="mt-4">
-                      <h4 className="font-medium mb-2">Placas Veiculares Detectadas:</h4>
+                      <h4 className="font-medium mb-2 flex items-center gap-2">
+                        <Car size={16} />
+                        Placas Veiculares Detectadas:
+                      </h4>
                       <div className="flex flex-wrap gap-2">
                         {image.licensePlates.map((plate, idx) => (
-                          <div 
+                          <Badge 
                             key={idx}
-                            className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-3 py-1 rounded-md"
+                            variant="secondary"
+                            className="px-3 py-1.5 text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900"
                           >
                             {plate}
-                          </div>
+                          </Badge>
                         ))}
                       </div>
+                      
+                      {plateAlternatives.length > 0 && (
+                        <div className="mt-4">
+                          <h5 className="text-sm font-medium text-orange-700 dark:text-orange-300 flex items-center gap-1.5">
+                            <Tag size={14} />
+                            Possíveis combinações (baixa confiança):
+                          </h5>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {plateAlternatives.map((plate, idx) => (
+                              <Badge 
+                                key={idx}
+                                variant="outline"
+                                className="text-orange-800 dark:text-orange-200 border-orange-300 dark:border-orange-800"
+                              >
+                                {plate}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -368,8 +514,19 @@ const ImageAnalysis = () => {
                         size="sm" 
                         variant="outline"
                         onClick={() => setShowFaceBox(!showFaceBox)}
+                        className="flex items-center gap-1.5"
                       >
-                        {showFaceBox ? 'Ocultar Marcações' : 'Mostrar Marcações'}
+                        {showFaceBox ? (
+                          <>
+                            <EyeOff size={14} />
+                            <span>Ocultar Marcações</span>
+                          </>
+                        ) : (
+                          <>
+                            <Eye size={14} />
+                            <span>Mostrar Marcações</span>
+                          </>
+                        )}
                       </Button>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
@@ -385,6 +542,23 @@ const ImageAnalysis = () => {
                         </div>
                       ))}
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {image && image.enhancementTechnique && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5" /> Técnica de Melhoria
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-md">
+                    <p className="text-purple-800 dark:text-purple-300">
+                      {image.enhancementTechnique}
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -434,6 +608,7 @@ const ImageAnalysis = () => {
                     />
                     
                     {activeTab === 'enhanced' && renderFaceBoxes()}
+                    {activeTab === 'enhanced' && renderPlateBoxes()}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-64 text-gray-500 dark:text-gray-400">
