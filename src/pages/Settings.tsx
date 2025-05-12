@@ -7,15 +7,15 @@ import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { Key, Bot, Database, HardDrive, Globe, Languages, Lock } from 'lucide-react';
+import { Key, Bot, Database, HardDrive, Globe, Languages, Lock, AlertTriangle } from 'lucide-react';
 import { getGroqSettings, saveGroqSettings, GroqSettings } from '../services/groqService';
 
 const Settings = () => {
   const [settings, setSettings] = useState<GroqSettings>({
     groqApiKey: '',
     groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-    groqModel: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-    whisperModel: 'distil-whisper-large-v3',
+    groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    whisperModel: 'whisper-large-v3',
     whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
     language: 'pt'
   });
@@ -68,8 +68,16 @@ const Settings = () => {
   
   const handleSaveSettings = () => {
     try {
+      // Display warning for empty API key
+      if (!settings.groqApiKey.trim()) {
+        toast.warning('Chave da API GROQ não configurada. A funcionalidade de IA será limitada.');
+      }
+      
       saveGroqSettings(settings);
       toast.success('Configurações salvas com sucesso');
+      
+      // Force a storage event to notify other tabs
+      window.dispatchEvent(new Event('storage'));
     } catch (error) {
       console.error('Error saving settings:', error);
       toast.error('Erro ao salvar configurações');
@@ -160,7 +168,14 @@ const Settings = () => {
                 value={settings.groqApiKey} 
                 onChange={(e) => handleSettingsChange('groqApiKey', e.target.value)}
                 placeholder="Insira sua chave da API GROQ"
+                className={!settings.groqApiKey ? "border-yellow-300 focus:ring-yellow-500" : ""}
               />
+              {!settings.groqApiKey && (
+                <div className="flex items-center gap-2 text-yellow-600 mt-1 text-xs">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span>A API GROQ requer uma chave válida para funcionar</span>
+                </div>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -240,6 +255,23 @@ const Settings = () => {
                 onChange={(e) => handleSettingsChange('whisperApiEndpoint', e.target.value)}
                 placeholder="https://api.groq.com/openai/v1/audio/transcriptions"
               />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="language">Idioma do Sistema</Label>
+              <Select
+                value={settings.language}
+                onValueChange={(value) => handleSettingsChange('language', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um idioma" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pt">Português (Brasil)</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="es">Español</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
           <CardFooter>

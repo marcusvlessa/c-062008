@@ -121,6 +121,10 @@ export const generateInvestigationReportWithGroq = async (
   try {
     console.log('Generating investigation report with occurrences:', occurrences.length);
     
+    if (!hasValidApiKey()) {
+      throw new Error('API key not configured');
+    }
+    
     // Create a prompt for the report generation
     const messages = [
       {
@@ -141,27 +145,7 @@ export const generateInvestigationReportWithGroq = async (
     return await makeGroqAIRequest(messages, 4096);
   } catch (error) {
     console.error('Error generating investigation report:', error);
-    
-    // If the API fails, return this error message instead of a mock
-    return `# Erro na Geração do Relatório de Investigação
-
-Ocorreu um erro ao tentar gerar o relatório de investigação com a API GROQ: 
-
-${error instanceof Error ? error.message : 'Erro desconhecido'}
-
-## Possíveis Causas:
-- A chave da API GROQ pode não estar configurada
-- A chave da API pode ser inválida
-- O modelo selecionado pode não estar disponível
-- Pode haver problemas de conectividade com a API
-
-## Como Resolver:
-1. Verifique se a chave da API GROQ está configurada corretamente
-2. Confirme se o modelo selecionado está disponível na sua conta
-3. Verifique sua conexão com a internet
-4. Tente novamente em alguns minutos
-
-Se o problema persistir, entre em contato com o suporte técnico.`;
+    throw error; // Re-throw the error instead of returning a mock
   }
 };
 
@@ -172,6 +156,10 @@ export const processLinkAnalysisDataWithGroq = async (
 ): Promise<any> => {
   try {
     console.log('Processing link analysis data');
+    
+    if (!hasValidApiKey()) {
+      throw new Error('API key not configured');
+    }
     
     // Create a prompt for link analysis that explicitly asks for valid JSON
     const messages = [
@@ -199,8 +187,8 @@ export const processLinkAnalysisDataWithGroq = async (
     try {
       // Handle cases where the model returns Markdown code blocks
       const jsonMatch = result.match(/```json\n([\s\S]*?)\n```/) || 
-                        result.match(/```\n([\s\S]*?)\n```/) ||
-                        result.match(/(\{[\s\S]*\})/);
+                      result.match(/```\n([\s\S]*?)\n```/) ||
+                      result.match(/(\{[\s\S]*\})/);
       
       const jsonString = jsonMatch ? jsonMatch[1] : result;
       return JSON.parse(jsonString);
@@ -210,16 +198,7 @@ export const processLinkAnalysisDataWithGroq = async (
     }
   } catch (error) {
     console.error('Error processing link analysis data:', error);
-    // Return simplified network data as fallback
-    return {
-      nodes: [
-        { id: "error1", label: "Error", group: "error", size: 15 },
-        { id: "error2", label: `${error instanceof Error ? error.message : 'API Error'}`, group: "message", size: 10 }
-      ],
-      links: [
-        { source: "error1", target: "error2", value: 5, type: "error_message" }
-      ]
-    };
+    throw error; // Re-throw the error instead of returning a mock
   }
 };
 
@@ -311,9 +290,9 @@ export const transcribeAudioWithGroq = async (
       try {
         // Try to parse the JSON response, handling potential Markdown code blocks
         const jsonMatch = speakerAnalysis.match(/```json\n([\s\S]*?)\n```/) || 
-                          speakerAnalysis.match(/```\n([\s\S]*?)\n```/) ||
-                          speakerAnalysis.match(/(\[[\s\S]*\])/);
-                          
+                        speakerAnalysis.match(/```\n([\s\S]*?)\n```/) ||
+                        speakerAnalysis.match(/(\[[\s\S]*\])/);
+                        
         const jsonString = jsonMatch ? jsonMatch[1] : speakerAnalysis;
         const parsedSegments = JSON.parse(jsonString);
         
@@ -340,7 +319,7 @@ export const transcribeAudioWithGroq = async (
     };
   } catch (error) {
     console.error('Error transcribing audio with GROQ:', error);
-    throw error;
+    throw error; // Re-throw the error instead of returning a mock
   }
 };
 
@@ -372,7 +351,7 @@ export const analyzeImageWithGroq = async (
       throw new Error('API key not configured');
     }
 
-    // Create a prompt for analyzing the image using base64 truncated
+    // Create a prompt for analyzing the image
     const messages = [
       {
         role: "system",
@@ -415,7 +394,7 @@ export const analyzeImageWithGroq = async (
     }
   } catch (error) {
     console.error('Error analyzing image with GROQ:', error);
-    throw error;
+    throw error; // Re-throw the error instead of returning a mock
   }
 };
 
@@ -437,9 +416,7 @@ export const enhanceImageWithGroq = async (
       throw new Error('API key not configured');
     }
 
-    // In a real implementation, this would call an image enhancement API
-    // Since GROQ doesn't yet have direct image enhancement capabilities,
-    // we're creating a description of enhancement techniques that would be applied
+    // Create a description of enhancement techniques that would be applied
     const messages = [
       {
         role: "system",
@@ -461,7 +438,7 @@ export const enhanceImageWithGroq = async (
     };
   } catch (error) {
     console.error('Error enhancing image:', error);
-    throw error;
+    throw error; // Re-throw the error instead of returning a mock
   }
 };
 

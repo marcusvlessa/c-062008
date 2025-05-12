@@ -27,8 +27,8 @@ function App() {
       saveGroqSettings({
         groqApiKey: '',  // Configurado pelo usuário na página de Configurações
         groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-        groqModel: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-        whisperModel: 'distil-whisper-large-v3',  // Versão mais recente do modelo
+        groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct', // Updated to requested default model
+        whisperModel: 'whisper-large-v3',  // Versão mais recente do modelo
         whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
         language: 'pt'  // Configuração padrão para português
       });

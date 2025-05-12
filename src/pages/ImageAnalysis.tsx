@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, Image as ImageIcon, Search, Scan, AlertTriangle, Database, Maximize2, ImagePlus, Car, Eye, EyeOff, Tag, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -197,60 +196,68 @@ const ImageAnalysis = () => {
       
       console.log('Processing new image...');
       
-      // First, enhance the image
-      const enhancementResult: ImageEnhancementResult = await enhanceImageWithGroq(image.original);
-      console.log('Enhanced image successfully');
+      try {
+        // First, enhance the image
+        const enhancementResult: ImageEnhancementResult = await enhanceImageWithGroq(image.original);
+        console.log('Enhanced image successfully');
+        
+        // Then, analyze the enhanced image for text and objects
+        const analysisResult: ImageAnalysisResult = await analyzeImageWithGroq(enhancementResult.enhancedImageUrl);
+        console.log('Analysis results:', { 
+          ocrTextLength: analysisResult.ocrText?.length,
+          facesCount: analysisResult.faces?.length,
+          licensePlatesCount: analysisResult.licensePlates?.length,
+          enhancementTechnique: analysisResult.enhancementTechnique
+        });
+        
+        // Create processed image object
+        const processedImage: ProcessedImage = {
+          ...image,
+          enhanced: enhancementResult.enhancedImageUrl,
+          ocrText: analysisResult.ocrText,
+          faces: analysisResult.faces,
+          licensePlates: analysisResult.licensePlates,
+          enhancementTechnique: enhancementResult.enhancementTechnique,
+          confidenceScores: analysisResult.confidenceScores
+        };
+        
+        setImage(processedImage);
+        setActiveTab('enhanced'); // Switch to enhanced tab automatically
+        
+        // Save to database
+        await saveImageAnalysis({
+          caseId: currentCase.id,
+          filename: image.name,
+          dataUrl: enhancementResult.enhancedImageUrl,
+          ocrText: analysisResult.ocrText,
+          faces: analysisResult.faces,
+          licensePlates: analysisResult.licensePlates,
+          enhancementTechnique: enhancementResult.enhancementTechnique,
+          confidenceScores: analysisResult.confidenceScores,
+          dateProcessed: new Date().toISOString()
+        });
+        
+        // Save to case
+        saveToCurrentCase({
+          timestamp: new Date().toISOString(),
+          imageName: image.name,
+          processingResults: {
+            hasOcr: analysisResult.ocrText && analysisResult.ocrText.length > 0,
+            ocrText: processedImage.ocrText,
+            facesDetected: (processedImage.faces?.length || 0),
+            licensePlatesDetected: (processedImage.licensePlates?.length || 0),
+            enhancementTechnique: enhancementResult.enhancementTechnique
+          }
+        }, 'imageAnalysis');
+        
+        toast.success('Imagem processada com sucesso e salva no banco de dados');
+        
+      } catch (error) {
+        console.error('API processing error:', error);
+        toast.error('Erro ao processar com a API GROQ: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+        throw error; // Rethrow to be caught by the outer catch block
+      }
       
-      // Then, analyze the enhanced image for text and objects
-      const analysisResult: ImageAnalysisResult = await analyzeImageWithGroq(enhancementResult.enhancedImageUrl);
-      console.log('Analysis results:', { 
-        ocrTextLength: analysisResult.ocrText?.length,
-        facesCount: analysisResult.faces?.length,
-        licensePlatesCount: analysisResult.licensePlates?.length,
-        enhancementTechnique: analysisResult.enhancementTechnique
-      });
-      
-      // Create processed image object
-      const processedImage: ProcessedImage = {
-        ...image,
-        enhanced: enhancementResult.enhancedImageUrl,
-        ocrText: analysisResult.ocrText,
-        faces: analysisResult.faces,
-        licensePlates: analysisResult.licensePlates,
-        enhancementTechnique: enhancementResult.enhancementTechnique,
-        confidenceScores: analysisResult.confidenceScores
-      };
-      
-      setImage(processedImage);
-      setActiveTab('enhanced'); // Switch to enhanced tab automatically
-      
-      // Save to database
-      await saveImageAnalysis({
-        caseId: currentCase.id,
-        filename: image.name,
-        dataUrl: enhancementResult.enhancedImageUrl,
-        ocrText: analysisResult.ocrText,
-        faces: analysisResult.faces,
-        licensePlates: analysisResult.licensePlates,
-        enhancementTechnique: enhancementResult.enhancementTechnique,
-        confidenceScores: analysisResult.confidenceScores,
-        dateProcessed: new Date().toISOString()
-      });
-      
-      // Save to case
-      saveToCurrentCase({
-        timestamp: new Date().toISOString(),
-        imageName: image.name,
-        processingResults: {
-          hasOcr: analysisResult.ocrText && analysisResult.ocrText.length > 0,
-          ocrText: processedImage.ocrText,
-          facesDetected: (processedImage.faces?.length || 0),
-          licensePlatesDetected: (processedImage.licensePlates?.length || 0),
-          enhancementTechnique: enhancementResult.enhancementTechnique
-        }
-      }, 'imageAnalysis');
-      
-      toast.success('Imagem processada com sucesso e salva no banco de dados');
     } catch (error) {
       console.error('Image processing error:', error);
       toast.error('Erro ao processar imagem: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
@@ -424,6 +431,7 @@ const ImageAnalysis = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Image Upload Card */}
           <div>
             <Card>
               <CardHeader>
@@ -490,6 +498,7 @@ const ImageAnalysis = () => {
               </CardContent>
             </Card>
 
+            {/* Results and Face detection UI */}
             {image && image.ocrText && (
               <Card className="mt-6">
                 <CardHeader>
@@ -611,6 +620,7 @@ const ImageAnalysis = () => {
             )}
           </div>
 
+          {/* Image Preview Card */}
           <div>
             <Card className="h-full">
               <CardHeader>
