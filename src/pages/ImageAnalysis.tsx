@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Image as ImageIcon, Search, Scan, AlertCircle, Database, Maximize2, ImagePlus, Car, Eye, EyeOff, Tag } from 'lucide-react';
+import { Upload, Image as ImageIcon, Search, Scan, AlertTriangle, Database, Maximize2, ImagePlus, Car, Eye, EyeOff, Tag } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -11,7 +12,8 @@ import {
   analyzeImageWithGroq, 
   enhanceImageWithGroq,
   ImageAnalysisResult,
-  ImageEnhancementResult
+  ImageEnhancementResult,
+  hasValidApiKey
 } from '../services/groqService';
 import { saveImageAnalysis, getImageAnalysesByCaseId } from '../services/databaseService';
 
@@ -45,6 +47,33 @@ const ImageAnalysis = () => {
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const [imageElement, setImageElement] = useState<HTMLImageElement | null>(null);
   const [plateAlternatives, setPlateAlternatives] = useState<string[]>([]);
+  const [apiKeyAvailable, setApiKeyAvailable] = useState<boolean>(false);
+
+  // Check if API key is configured
+  useEffect(() => {
+    checkApiKey();
+    
+    // Set up listener for storage events to detect settings changes
+    const handleStorageChange = () => {
+      checkApiKey();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Check periodically in case settings were updated in another tab
+    const interval = setInterval(checkApiKey, 5000);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const checkApiKey = () => {
+    const keyAvailable = hasValidApiKey();
+    console.log("API key check:", keyAvailable ? "Available" : "Not available");
+    setApiKeyAvailable(keyAvailable);
+  };
 
   // Check for existing analyses in the database when case changes
   useEffect(() => {
@@ -135,6 +164,11 @@ const ImageAnalysis = () => {
       return;
     }
     
+    if (!apiKeyAvailable) {
+      toast.error('Chave da API GROQ não configurada. Por favor, configure sua chave na aba de Configurações.');
+      return;
+    }
+    
     setIsProcessing(true);
     
     try {
@@ -163,7 +197,7 @@ const ImageAnalysis = () => {
       
       console.log('Processing new image...');
       
-      // First, enhance the image with real image processing
+      // First, enhance the image
       const enhancementResult: ImageEnhancementResult = await enhanceImageWithGroq(image.original);
       console.log('Enhanced image successfully');
       
@@ -345,7 +379,7 @@ const ImageAnalysis = () => {
     );
   };
 
-  // Render license plate boxes (simplified version, in real app would need proper positioning)
+  // Render license plate boxes
   const renderPlateBoxes = () => {
     if (!image?.licensePlates || !image.licensePlates.length || !showPlateBox) return null;
     
@@ -434,11 +468,22 @@ const ImageAnalysis = () => {
                       </div>
                       <Button
                         onClick={processImage}
-                        disabled={isProcessing || isCheckingDb}
+                        disabled={isProcessing || isCheckingDb || !apiKeyAvailable}
                         className="w-full"
                       >
                         {isProcessing ? 'Processando com IA...' : isCheckingDb ? 'Verificando BD...' : 'Processar Imagem'}
                       </Button>
+                      
+                      {!apiKeyAvailable && (
+                        <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                            <p className="text-yellow-800 dark:text-yellow-200">
+                              Chave da API GROQ não configurada. Por favor, configure sua chave na aba de Configurações.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

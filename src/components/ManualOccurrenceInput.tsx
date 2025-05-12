@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { toast } from 'sonner';
 import { Clipboard, Pencil, Send, AlertTriangle, Upload, Check } from 'lucide-react';
-import { makeGroqAIRequest, getGroqSettings } from '../services/groqService';
+import { makeGroqAIRequest, getGroqSettings, hasValidApiKey } from '../services/groqService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { parsePdfToText } from '../services/databaseService';
 import { Input } from './ui/input';
@@ -23,7 +23,7 @@ const ManualOccurrenceInput = ({
 }: ManualOccurrenceInputProps) => {
   const [manualText, setManualText] = useState<string>('');
   const [activeTab, setActiveTab] = useState<string>('manual');
-  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+  const [apiKeyAvailable, setApiKeyAvailable] = useState<boolean>(false);
   const [file, setFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
 
@@ -48,15 +48,19 @@ const ManualOccurrenceInput = ({
   }, []);
 
   const checkApiKey = () => {
-    const settings = getGroqSettings();
-    const hasKey = !!settings.groqApiKey && settings.groqApiKey.trim() !== '';
-    console.log("API key check:", hasKey ? "Available" : "Not available");
-    setHasApiKey(hasKey);
+    const keyAvailable = hasValidApiKey();
+    console.log("API key check:", keyAvailable ? "Available" : "Not available");
+    setApiKeyAvailable(keyAvailable);
   };
 
   const handleAnalyzeManualText = async () => {
     if (!manualText.trim()) {
       toast.error('Por favor, insira o texto da ocorrência primeiro');
+      return;
+    }
+
+    if (!apiKeyAvailable) {
+      toast.error('Chave da API GROQ não configurada. Configure nas configurações do sistema.');
       return;
     }
 
@@ -85,24 +89,10 @@ const ManualOccurrenceInput = ({
         }
       ];
       
-      console.log('Sending manual text for AI analysis, API key available:', hasApiKey);
-      
-      let aiAnalysis = '';
-      
-      // Get GROQ API settings
-      const settings = getGroqSettings();
-      
-      // Check if API key is actually set
-      if (!settings.groqApiKey || settings.groqApiKey.trim() === '') {
-        console.error('No GROQ API key configured, will use mock response');
-        throw new Error('Chave da API GROQ não configurada. Configure nas configurações do sistema.');
-      }
-      
-      // Console log the model being used
-      console.log(`Using model: ${settings.groqModel}`);
+      console.log('Sending manual text for AI analysis');
       
       // Call the AI service with a longer token limit for detailed analysis
-      aiAnalysis = await makeGroqAIRequest(messages, 4096);
+      const aiAnalysis = await makeGroqAIRequest(messages, 4096);
       console.log('Analysis completed successfully, length:', aiAnalysis.length);
       
       // Pass analysis back to parent component
@@ -112,26 +102,6 @@ const ManualOccurrenceInput = ({
     } catch (error) {
       console.error('Analysis error:', error);
       toast.error('Erro ao realizar análise: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
-      
-      // Provide a fallback analysis message
-      const fallbackAnalysis = `
-# Análise do Boletim de Ocorrência (FALLBACK)
-
-**Nota: Ocorreu um erro ao processar a análise completa. Este é um relatório simplificado.**
-
-## Resumo do Incidente
-Não foi possível processar o conteúdo do boletim de ocorrência devido a um erro técnico.
-
-## Recomendações
-- Verifique se a chave da API GROQ está configurada corretamente
-- Tente novamente mais tarde
-- Se o problema persistir, entre em contato com o suporte
-- Verifique se o modelo de IA selecionado é válido e tem acesso autorizado
-
-*Este é um relatório de fallback gerado automaticamente quando ocorre um erro de processamento.*
-`;
-      
-      onAnalysisComplete(fallbackAnalysis);
     } finally {
       setIsProcessing(false);
     }
@@ -268,7 +238,7 @@ Não foi possível processar o conteúdo do boletim de ocorrência devido a um e
             />
             <Button
               onClick={handleAnalyzeManualText}
-              disabled={!manualText.trim() || isProcessing}
+              disabled={!manualText.trim() || isProcessing || !apiKeyAvailable}
               className="w-full"
             >
               {isProcessing ? 'Analisando com IA...' : 
@@ -278,7 +248,8 @@ Não foi possível processar o conteúdo do boletim de ocorrência devido a um e
                 </div>
               }
             </Button>
-            {!hasApiKey && (
+            
+            {!apiKeyAvailable && (
               <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
@@ -288,7 +259,8 @@ Não foi possível processar o conteúdo do boletim de ocorrência devido a um e
                 </div>
               </div>
             )}
-            {hasApiKey && (
+            
+            {apiKeyAvailable && (
               <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
                 <p className="text-green-800 dark:text-green-200 mb-1">
                   Chave da API GROQ configurada. A análise será processada usando a API GROQ.

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Check, AlertCircle, Database, Search, FileEdit } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -6,7 +7,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
-import { makeGroqAIRequest } from '../services/groqService';
+import { makeGroqAIRequest, hasValidApiKey } from '../services/groqService';
 import ManualOccurrenceInput from '../components/ManualOccurrenceInput';
 import { 
   parsePdfToText, 
@@ -103,6 +104,11 @@ const OccurrenceAnalysis = () => {
       toast.error('Por favor, selecione um caso antes de prosseguir');
       return;
     }
+    
+    if (!hasValidApiKey()) {
+      toast.error('Chave da API GROQ não configurada. Por favor, configure sua chave na aba de Configurações.');
+      return;
+    }
 
     setIsLoading(true);
     console.log('Starting analysis for file:', file.name);
@@ -149,19 +155,8 @@ const OccurrenceAnalysis = () => {
       
       console.log('Sending content for AI analysis');
       
-      // Check if API key exists, otherwise use mock analysis
-      const apiSettings = localStorage.getItem('securai-api-settings');
-      const hasApiKey = apiSettings && JSON.parse(apiSettings).groqApiKey;
-      
-      let aiAnalysis = '';
-      if (hasApiKey) {
-        // Use real API
-        aiAnalysis = await makeGroqAIRequest(messages, 2048);
-      } else {
-        // Use mock analysis
-        console.log('No API key found, using mock analysis');
-        aiAnalysis = getMockAnalysis(fileContent);
-      }
+      // Use the API to analyze the content
+      const aiAnalysis = await makeGroqAIRequest(messages, 4096);
       
       console.log('Analysis completed successfully, length:', aiAnalysis.length);
       console.log('First 100 chars of analysis:', aiAnalysis.substring(0, 100));
@@ -174,7 +169,7 @@ const OccurrenceAnalysis = () => {
         await updateCaseCrimeTypes(currentCase.id, crimeTypes);
       }
       
-      // Save to database (implement mock storage with localStorage)
+      // Save to database
       const occurrenceData = {
         caseId: currentCase.id,
         filename: file.name,
@@ -226,64 +221,6 @@ const OccurrenceAnalysis = () => {
       console.error('Error extracting crime types:', error);
       return [];
     }
-  };
-
-  // Function to generate mock analysis when API key is not available
-  const getMockAnalysis = (content: string): string => {
-    console.log('Generating mock analysis for content of length:', content.length);
-    
-    // Extract basic information from the content to make the mock analysis more relevant
-    const hasVictim = content.includes('VÍTIMA') || content.includes('VITIMA');
-    const hasSuspect = content.includes('ACUSADO') || content.includes('SUSPEITO');
-    const hasRobbery = content.includes('ROUBO') || content.includes('FURTO') || content.includes('SUBTRA');
-    const hasAssault = content.includes('AGRESS') || content.includes('LESÃO') || content.includes('LESAO');
-    
-    return `**Relatório de Análise do Boletim de Ocorrência**
-=====================================
-
-## 1. Resumo do Incidente
-${hasRobbery ? 
-  'Ocorrência de crime patrimonial com subtração de bens mediante ' + (content.includes('AMEAÇA') ? 'grave ameaça' : 'arrombamento de residência') : 
-  hasAssault ? 
-  'Registro de agressão física/verbal contra a vítima em via pública' : 
-  'Registro de ocorrência envolvendo infração penal em andamento'}. 
-Fato ocorrido conforme data e horário descritos no boletim.
-
-## 2. Dados da Vítima
-${hasVictim ? 
-  'Vítima identificada no boletim com documentação completa e endereço fixo, o que facilita contatos posteriores para diligências complementares.' : 
-  'Comunicante compareceu à delegacia para registro dos fatos, apresentando documentação completa.'}
-
-## 3. Dados do Suspeito
-${hasSuspect ? 
-  'Há informações preliminares sobre possível autor, necessitando investigação complementar para identificação completa e confirmação de autoria.' : 
-  'Não há identificação precisa de suspeitos no momento do registro. Necessário levantamento de testemunhas e demais elementos probatórios.'}
-
-## 4. Descrição Detalhada dos Fatos
-O boletim descreve ${hasRobbery ? 'subtração de bens' : hasAssault ? 'agressão contra a vítima' : 'os fatos ocorridos'} com detalhes sobre local, horário e circunstâncias. ${content.includes('TESTEMUNHA') ? 'Há indicação de testemunhas que podem colaborar com a investigação.' : 'Não foram identificadas testemunhas no momento do registro.'}
-
-## 5. Sugestões para Investigação
-- Realizar oitiva detalhada da vítima para complementação de informações
-- ${content.includes('CÂMERA') || content.includes('CAMERA') ? 'Analisar imagens de câmeras de segurança mencionadas' : 'Verificar existência de câmeras de segurança no local e adjacências'}
-- Realizar perícia técnica no local para coleta de vestígios
-- ${hasSuspect ? 'Identificar e localizar o suspeito para interrogatório' : 'Buscar informações sobre possíveis suspeitos na região'}
-
-## 6. Despacho Sugerido
-Determino a instauração de procedimento investigativo para apuração dos fatos narrados. Designo equipe para diligências preliminares e coleta de provas. Necessário oitiva complementar da vítima e testemunhas.
-
-## 7. Pontos de Atenção
-- ${hasRobbery ? 'Verificar padrão de atuação para comparação com outros registros semelhantes na região' : hasAssault ? 'Avaliar necessidade de medidas protetivas urgentes' : 'Atentar para prazos processuais e prescricionais'}
-- ${content.includes('ARMA') ? 'Atenção para o possível uso de arma no delito, o que qualifica a conduta' : 'Observar circunstâncias que possam qualificar a conduta criminosa'}
-
-## 8. Possíveis Contradições/Inconsistências
-Não foram identificadas contradições evidentes no registro inicial, porém recomenda-se complementação de informações para esclarecimento completo dos fatos.
-
-## 9. Classificação Penal Sugerida
-${hasRobbery ? 
-  content.includes('AMEAÇA') || content.includes('ARMA') ? 'Art. 157 do CP - Roubo' : 'Art. 155 do CP - Furto' : 
-  hasAssault ? 
-  'Art. 129 do CP - Lesão Corporal' + (content.includes('DOMÉSTICA') || content.includes('DOMESTICA') ? ' no âmbito de violência doméstica (Lei Maria da Penha)' : '') : 
-  'Aguardando elementos para tipificação definitiva'}`;
   };
 
   const handleManualAnalysisComplete = (analysisResult: string) => {
@@ -419,11 +356,22 @@ ${hasRobbery ?
 
                   <Button
                     onClick={handleAnalyzeClick}
-                    disabled={!file || isLoading || isCheckingDb}
+                    disabled={!file || isLoading || isCheckingDb || !hasValidApiKey()}
                     className="w-full"
                   >
                     {isLoading ? 'Analisando com IA...' : isCheckingDb ? 'Verificando BD...' : 'Analisar Documento'}
                   </Button>
+                  
+                  {!hasValidApiKey() && (
+                    <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                        <p className="text-yellow-800 dark:text-yellow-200">
+                          Chave da API GROQ não configurada. Por favor, configure sua chave na aba de Configurações.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

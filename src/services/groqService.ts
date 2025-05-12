@@ -16,8 +16,8 @@ export type GroqSettings = {
 const DEFAULT_GROQ_SETTINGS: GroqSettings = {
   groqApiKey: '',
   groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-  groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',  // Default model updated
-  whisperModel: 'whisper-large-v3', // Updated model
+  groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',
+  whisperModel: 'whisper-large-v3',
   whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
   language: 'pt'
 };
@@ -54,6 +54,12 @@ export const saveGroqSettings = (settings: GroqSettings): void => {
   }
 };
 
+// Check if API key is available and valid
+export const hasValidApiKey = (): boolean => {
+  const settings = getGroqSettings();
+  return !!settings.groqApiKey && settings.groqApiKey.trim() !== '';
+};
+
 // Make a request to the GROQ API for text generation
 export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 1024): Promise<string> => {
   try {
@@ -76,7 +82,8 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
       body: JSON.stringify({
         model: settings.groqModel,
         messages: messages,
-        max_tokens: maxTokens
+        max_tokens: maxTokens,
+        temperature: 0.7
       })
     });
 
@@ -112,6 +119,8 @@ export const generateInvestigationReportWithGroq = async (
   occurrences: any[]
 ): Promise<string> => {
   try {
+    console.log('Generating investigation report with occurrences:', occurrences.length);
+    
     // Create a prompt for the report generation
     const messages = [
       {
@@ -132,7 +141,27 @@ export const generateInvestigationReportWithGroq = async (
     return await makeGroqAIRequest(messages, 4096);
   } catch (error) {
     console.error('Error generating investigation report:', error);
-    return getMockInvestigationReport(caseData, occurrences);
+    
+    // If the API fails, return this error message instead of a mock
+    return `# Erro na Geração do Relatório de Investigação
+
+Ocorreu um erro ao tentar gerar o relatório de investigação com a API GROQ: 
+
+${error instanceof Error ? error.message : 'Erro desconhecido'}
+
+## Possíveis Causas:
+- A chave da API GROQ pode não estar configurada
+- A chave da API pode ser inválida
+- O modelo selecionado pode não estar disponível
+- Pode haver problemas de conectividade com a API
+
+## Como Resolver:
+1. Verifique se a chave da API GROQ está configurada corretamente
+2. Confirme se o modelo selecionado está disponível na sua conta
+3. Verifique sua conexão com a internet
+4. Tente novamente em alguns minutos
+
+Se o problema persistir, entre em contato com o suporte técnico.`;
   }
 };
 
@@ -142,36 +171,55 @@ export const processLinkAnalysisDataWithGroq = async (
   linkData: string
 ): Promise<any> => {
   try {
-    // Create a prompt for link analysis
+    console.log('Processing link analysis data');
+    
+    // Create a prompt for link analysis that explicitly asks for valid JSON
     const messages = [
       {
         role: "system",
         content: 
           "Você é um assistente especializado em análise de vínculos. " +
           "Sua função é analisar dados de relacionamentos e gerar uma estrutura " +
-          "de grafo com nós e arestas para visualização. Retorne APENAS um JSON válido com a estrutura: " +
-          "{ \"nodes\": [{\"id\": string, \"label\": string, \"group\": string, \"size\": number}], " +
-          "\"links\": [{\"source\": string, \"target\": string, \"value\": number, \"type\": string}] }"
+          "de grafo com nós e arestas para visualização. Você DEVE retornar APENAS " +
+          "um objeto JSON válido e NADA mais em seu resultado, com a estrutura: " +
+          '{ "nodes": [{"id": string, "label": string, "group": string, "size": number}], ' +
+          '"links": [{"source": string, "target": string, "value": number, "type": string}] }'
       },
       {
         role: "user",
-        content: `Processe os seguintes dados para análise de vínculos:\n\n${linkData}\n\nDados do caso: ${JSON.stringify(caseData, null, 2)}`
+        content: `Processe os seguintes dados para análise de vínculos e retorne SOMENTE JSON sem explicações:\n\n${linkData}\n\nDados do caso: ${JSON.stringify(caseData, null, 2)}`
       }
     ];
     
     const result = await makeGroqAIRequest(messages, 4096);
     
-    // Try to parse the result as JSON
+    console.log("Link analysis raw result:", result.substring(0, 200) + "...");
+    
+    // Try to parse the result as JSON, handling different format possibilities
     try {
-      return JSON.parse(result);
+      // Handle cases where the model returns Markdown code blocks
+      const jsonMatch = result.match(/```json\n([\s\S]*?)\n```/) || 
+                        result.match(/```\n([\s\S]*?)\n```/) ||
+                        result.match(/(\{[\s\S]*\})/);
+      
+      const jsonString = jsonMatch ? jsonMatch[1] : result;
+      return JSON.parse(jsonString);
     } catch (e) {
-      // If parsing fails, return a mock network for demonstration
-      console.error("Failed to parse link analysis result as JSON, using mock data", e);
-      return getMockNetworkData();
+      console.error("Failed to parse link analysis result as JSON:", e);
+      throw new Error("Invalid JSON returned from API. Please try again.");
     }
   } catch (error) {
     console.error('Error processing link analysis data:', error);
-    return getMockNetworkData();
+    // Return simplified network data as fallback
+    return {
+      nodes: [
+        { id: "error1", label: "Error", group: "error", size: 15 },
+        { id: "error2", label: `${error instanceof Error ? error.message : 'API Error'}`, group: "message", size: 10 }
+      ],
+      links: [
+        { source: "error1", target: "error2", value: 5, type: "error_message" }
+      ]
+    };
   }
 };
 
@@ -261,8 +309,14 @@ export const transcribeAudioWithGroq = async (
       const speakerAnalysis = await makeGroqAIRequest(speakerDetectionPrompt, 2048);
       
       try {
-        // Try to parse the JSON response
-        const parsedSegments = JSON.parse(speakerAnalysis);
+        // Try to parse the JSON response, handling potential Markdown code blocks
+        const jsonMatch = speakerAnalysis.match(/```json\n([\s\S]*?)\n```/) || 
+                          speakerAnalysis.match(/```\n([\s\S]*?)\n```/) ||
+                          speakerAnalysis.match(/(\[[\s\S]*\])/);
+                          
+        const jsonString = jsonMatch ? jsonMatch[1] : speakerAnalysis;
+        const parsedSegments = JSON.parse(jsonString);
+        
         if (Array.isArray(parsedSegments)) {
           speakerSegments = parsedSegments;
         }
@@ -286,8 +340,7 @@ export const transcribeAudioWithGroq = async (
     };
   } catch (error) {
     console.error('Error transcribing audio with GROQ:', error);
-    // Fallback to mock data
-    return getMockAudioTranscription(audioFile.name);
+    throw error;
   }
 };
 
@@ -323,7 +376,11 @@ export const analyzeImageWithGroq = async (
     const messages = [
       {
         role: "system",
-        content: "You are an assistant that analyzes images and extracts information. Please provide a detailed analysis of the image in JSON format with fields: ocrText (extracted text), faces (array of detected faces), licensePlates (array of detected plate numbers), and any other relevant information."
+        content: 
+          "You are an assistant that analyzes images and extracts information. " +
+          "Please provide a detailed analysis of the image in JSON format with fields: " +
+          "ocrText (extracted text), faces (array of detected faces), licensePlates (array of detected plate numbers), " +
+          "enhancementTechnique (description of techniques used), and any other relevant information."
       },
       {
         role: "user",
@@ -333,14 +390,32 @@ export const analyzeImageWithGroq = async (
 
     console.log('Analyzing image with GROQ API...');
     
-    // For now, still using mock implementation until vision model support is added to GROQ
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const result = await makeGroqAIRequest(messages, 2048);
     
-    // Return mock analysis
-    return getMockImageAnalysis();
+    try {
+      // Try to parse the JSON response, handling potential Markdown code blocks
+      const jsonMatch = result.match(/```json\n([\s\S]*?)\n```/) || 
+                        result.match(/```\n([\s\S]*?)\n```/) ||
+                        result.match(/(\{[\s\S]*\})/);
+                        
+      const jsonString = jsonMatch ? jsonMatch[1] : result;
+      const analysis = JSON.parse(jsonString);
+      
+      // Ensure the response has the expected structure
+      return {
+        ocrText: analysis.ocrText || '',
+        faces: Array.isArray(analysis.faces) ? analysis.faces : [],
+        licensePlates: Array.isArray(analysis.licensePlates) ? analysis.licensePlates : [],
+        enhancementTechnique: analysis.enhancementTechnique || 'Standard image enhancement techniques applied',
+        confidenceScores: analysis.confidenceScores
+      };
+    } catch (e) {
+      console.error('Error parsing image analysis result:', e);
+      throw new Error('Failed to parse the API response');
+    }
   } catch (error) {
     console.error('Error analyzing image with GROQ:', error);
-    return getMockImageAnalysis();
+    throw error;
   }
 };
 
@@ -363,141 +438,38 @@ export const enhanceImageWithGroq = async (
     }
 
     // In a real implementation, this would call an image enhancement API
-    console.log('Enhancing image with GROQ API...');
+    // Since GROQ doesn't yet have direct image enhancement capabilities,
+    // we're creating a description of enhancement techniques that would be applied
+    const messages = [
+      {
+        role: "system",
+        content: "You are an expert in forensic image enhancement. Describe the techniques that would be applied to enhance the provided image for forensic analysis."
+      },
+      {
+        role: "user",
+        content: `Describe the techniques that would be used to enhance this image for forensic purposes: ${imageUrl.substring(0, 50)}... (image data truncated)`
+      }
+    ];
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    const enhancementDescription = await makeGroqAIRequest(messages, 1024);
     
-    // For now, just return the original image with a description
+    // Since we can't actually enhance the image with GROQ API currently,
+    // we'll return the original image with the description of techniques
     return {
       enhancedImageUrl: imageUrl,
-      enhancementTechnique: 'Aplicada técnica de Super Resolução com melhorias de contraste e nitidez. A imagem passou por processo de redução de ruído e aprimoramento de bordas usando modelo de difusão especializado para imagens forenses.'
+      enhancementTechnique: enhancementDescription.replace(/^(#|##|\*\*) .*\n/, '')  // Remove any markdown headers
     };
   } catch (error) {
     console.error('Error enhancing image:', error);
-    return {
-      enhancedImageUrl: imageUrl,
-      enhancementTechnique: 'Erro no processamento da imagem'
-    };
+    throw error;
   }
-};
-
-// Mock functions for testing without API key
-
-// Generate a mock AI response
-const getMockAIResponse = (): string => {
-  return "Isso é uma resposta simulada da IA. Em um ambiente real, a análise seria realizada pela API GROQ configurada. Por favor, configure sua chave da API GROQ nas configurações do sistema para obter resultados reais.";
-};
-
-// Generate mock investigation report
-const getMockInvestigationReport = (caseData: any, occurrences: any[]): string => {
-  return `# Relatório de Investigação (SIMULADO)
-
-## Informações do Caso
-- **Caso:** ${caseData.title || 'Caso sem título'}
-- **ID:** ${caseData.id || 'ID não disponível'}
-- **Data de Criação:** ${new Date().toLocaleDateString()}
-- **Ocorrências Analisadas:** ${occurrences.length}
-
-## Análise de Ocorrências
-${occurrences.map((o, index) => `
-### Ocorrência ${index + 1}: ${o.filename || 'Nome não disponível'}
-- **Data de Registro:** ${o.dateProcessed || 'Não disponível'}
-- **Resumo:** ${o.analysis?.substring(0, 100)}...
-`).join('\n')}
-
-## Recomendações
-1. Esta é uma análise simulada. Configure sua chave da API GROQ nas configurações.
-2. Recomenda-se verificar manualmente todas as informações antes de prosseguir.
-
-## Observações Finais
-Este relatório é apenas uma simulação. Para obter uma análise real e detalhada, configure a integração com a API GROQ.`;
-};
-
-// Generate mock audio transcription
-const getMockAudioTranscription = (fileName: string): TranscriptionResult => {
-  console.log('Generating mock transcription for:', fileName);
-  
-  const mockText = `Esta é uma transcrição simulada para o arquivo ${fileName}. Em uma implementação real, o áudio seria processado pela API Whisper via GROQ. Por favor, configure sua chave da API GROQ nas configurações para obter transcrições reais.`;
-  
-  const mockSegments = [
-    {
-      speaker: "Speaker 1",
-      start: 0,
-      end: 10,
-      text: "Esta é uma transcrição simulada para o arquivo.",
-    },
-    {
-      speaker: "Speaker 2",
-      start: 10,
-      end: 20,
-      text: "Em uma implementação real, o áudio seria processado pela API Whisper via GROQ."
-    },
-    {
-      speaker: "Speaker 1",
-      start: 20,
-      end: 30,
-      text: "Por favor, configure sua chave da API GROQ nas configurações para obter transcrições reais."
-    }
-  ];
-  
-  return {
-    text: mockText,
-    speakerSegments: mockSegments
-  };
-};
-
-// Generate mock image analysis
-const getMockImageAnalysis = (): ImageAnalysisResult => {
-  return {
-    ocrText: "DETRAN-SP\nVEÍCULO PLACA: ABC1234\nRENAVAM: 12345678901\nProprietário: João da Silva\nEndereço: Av. Paulista, 1000 - São Paulo, SP\n\nNOTA: Esta é uma análise simulada. Configure sua chave da API GROQ para resultados reais.",
-    faces: [
-      {
-        id: 1,
-        confidence: 0.92,
-        region: { x: 100, y: 50, width: 200, height: 200 }
-      },
-      {
-        id: 2,
-        confidence: 0.85,
-        region: { x: 400, y: 80, width: 180, height: 180 }
-      }
-    ],
-    licensePlates: ["ABC1234"],
-    enhancementTechnique: "Super resolução com melhorias de contraste e nitidez (simulação)",
-    confidenceScores: {
-      plate: "ABC1234",
-      scores: [95, 98, 99, 85, 92, 87, 90]
-    }
-  };
-};
-
-// Generate mock network data for link analysis
-const getMockNetworkData = () => {
-  return {
-    nodes: [
-      { id: "1", label: "João Silva", group: "suspect", size: 15 },
-      { id: "2", label: "Maria Oliveira", group: "victim", size: 10 },
-      { id: "3", label: "Empresa XYZ", group: "organization", size: 12 },
-      { id: "4", label: "Apartamento 101", group: "location", size: 8 },
-      { id: "5", label: "Celular apreendido", group: "evidence", size: 7 },
-      { id: "6", label: "Carlos Pereira", group: "witness", size: 9 }
-    ],
-    links: [
-      { source: "1", target: "2", value: 5, type: "knows" },
-      { source: "1", target: "3", value: 8, type: "works_at" },
-      { source: "2", target: "4", value: 3, type: "lives_at" },
-      { source: "1", target: "5", value: 4, type: "owns" },
-      { source: "6", target: "2", value: 2, type: "knows" },
-      { source: "3", target: "4", value: 1, type: "owns" }
-    ]
-  };
 };
 
 // Default export for the service
 export default {
   getGroqSettings,
   saveGroqSettings,
+  hasValidApiKey,
   makeGroqAIRequest,
   generateInvestigationReportWithGroq,
   processLinkAnalysisDataWithGroq,
