@@ -22,7 +22,7 @@ function App() {
     const settings = getGroqSettings();
     
     // Check if API key is already set
-    if (!settings.groqApiKey && !localStorage.getItem('securai-api-settings')) {
+    if (!localStorage.getItem('securai-api-settings')) {
       // Set default endpoints if not configured
       saveGroqSettings({
         groqApiKey: '',  // Configurado pelo usuário na página de Configurações

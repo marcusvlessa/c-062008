@@ -109,7 +109,7 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
     return data.choices[0].message.content;
   } catch (error) {
     console.error('Error calling GROQ API:', error);
-    throw error; // Re-throw to let caller handle it
+    throw error;
   }
 };
 
