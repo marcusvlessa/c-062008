@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Image as ImageIcon, Search, Scan, AlertTriangle, Database, Maximize2, ImagePlus, Car, Eye, EyeOff, Tag } from 'lucide-react';
+import { Upload, Image as ImageIcon, Search, Scan, AlertTriangle, Database, Maximize2, ImagePlus, Car, Eye, EyeOff, Tag, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
