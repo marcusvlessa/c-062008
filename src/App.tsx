@@ -19,9 +19,7 @@ import './index.css';
 function App() {
   // Initialize default API settings if not already set
   useEffect(() => {
-    const settings = getGroqSettings();
-    
-    // Check if API key is already set
+    // Check if API settings are already set
     if (!localStorage.getItem('securai-api-settings')) {
       // Set default endpoints if not configured
       saveGroqSettings({
@@ -34,6 +32,10 @@ function App() {
       });
       
       console.log('Configurações padrão da API GROQ inicializadas');
+    } else {
+      // If settings already exist, log them
+      const settings = getGroqSettings();
+      console.log('API GROQ já configurada. Modelo atual:', settings.groqModel);
     }
   }, []);
 

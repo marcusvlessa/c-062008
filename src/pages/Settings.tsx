@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -7,8 +6,8 @@ import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { Key, Bot, Database, HardDrive, Globe, Languages, Lock, AlertTriangle } from 'lucide-react';
-import { getGroqSettings, saveGroqSettings, GroqSettings } from '../services/groqService';
+import { Key, Bot, Database, HardDrive, Globe, Languages, Lock, AlertTriangle, Info } from 'lucide-react';
+import { getGroqSettings, saveGroqSettings, GroqSettings, hasValidApiKey } from '../services/groqService';
 
 const Settings = () => {
   const [settings, setSettings] = useState<GroqSettings>({
@@ -23,11 +22,26 @@ const Settings = () => {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isEncryption, setIsEncryption] = useState<boolean>(false);
   const [localStorageSize, setLocalStorageSize] = useState<string>('0 KB');
+  const [showFullApiKey, setShowFullApiKey] = useState<boolean>(false);
+  const [apiKeyValid, setApiKeyValid] = useState<boolean>(false);
   
   useEffect(() => {
     // Load settings on mount
     const savedSettings = getGroqSettings();
-    setSettings(savedSettings);
+    
+    // Hide the actual API key and just put placeholders if it exists
+    const displaySettings = {...savedSettings};
+    
+    if (savedSettings.groqApiKey) {
+      // For display purposes, mask the API key
+      const apiKeyLength = savedSettings.groqApiKey.length;
+      displaySettings.groqApiKey = showFullApiKey 
+        ? savedSettings.groqApiKey
+        : `gsk_${new Array(apiKeyLength - 8).fill('•').join('')}${savedSettings.groqApiKey.slice(-4)}`;
+    }
+    
+    setSettings(displaySettings);
+    setApiKeyValid(hasValidApiKey());
     
     // Get current theme preference
     const isDark = document.documentElement.classList.contains('dark');
@@ -35,7 +49,7 @@ const Settings = () => {
     
     // Calculate localStorage usage
     calculateLocalStorageSize();
-  }, []);
+  }, [showFullApiKey]);
   
   const calculateLocalStorageSize = () => {
     try {
@@ -68,12 +82,32 @@ const Settings = () => {
   
   const handleSaveSettings = () => {
     try {
+      const existingSettings = getGroqSettings();
+      
+      // If the API key looks masked, keep the existing one
+      const apiKey = settings.groqApiKey.includes('•') ? existingSettings.groqApiKey : settings.groqApiKey;
+      
+      // Create the settings to save
+      const newSettings: GroqSettings = {
+        ...settings,
+        groqApiKey: apiKey
+      };
+      
       // Display warning for empty API key
-      if (!settings.groqApiKey.trim()) {
+      if (!newSettings.groqApiKey.trim()) {
         toast.warning('Chave da API GROQ não configurada. A funcionalidade de IA será limitada.');
+      } else if (!newSettings.groqApiKey.startsWith('gsk_')) {
+        toast.warning('A chave API GROQ normalmente começa com "gsk_". Verifique se ela está correta.');
       }
       
-      saveGroqSettings(settings);
+      saveGroqSettings(newSettings);
+      
+      // Update API key valid status
+      setApiKeyValid(hasValidApiKey());
+      
+      // Dispatch custom event to notify other components
+      document.dispatchEvent(new Event('apiKeyUpdated'));
+      
       toast.success('Configurações salvas com sucesso');
       
       // Force a storage event to notify other tabs
@@ -145,6 +179,10 @@ const Settings = () => {
     }
   };
   
+  const toggleApiKeyVisibility = () => {
+    setShowFullApiKey(!showFullApiKey);
+  };
+  
   return (
     <div className="container mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-bold mb-6">Configurações</h1>
@@ -162,20 +200,41 @@ const Settings = () => {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="groqApiKey">Chave da API GROQ</Label>
-              <Input
-                id="groqApiKey" 
-                type="password"
-                value={settings.groqApiKey} 
-                onChange={(e) => handleSettingsChange('groqApiKey', e.target.value)}
-                placeholder="Insira sua chave da API GROQ"
-                className={!settings.groqApiKey ? "border-yellow-300 focus:ring-yellow-500" : ""}
-              />
-              {!settings.groqApiKey && (
+              <div className="flex gap-2">
+                <Input
+                  id="groqApiKey" 
+                  type={showFullApiKey ? "text" : "password"}
+                  value={settings.groqApiKey} 
+                  onChange={(e) => handleSettingsChange('groqApiKey', e.target.value)}
+                  placeholder="Insira sua chave da API GROQ (ex: gsk_...)"
+                  className={apiKeyValid ? "border-green-300" : "border-yellow-300 focus:ring-yellow-500"}
+                />
+                <Button 
+                  type="button" 
+                  size="icon" 
+                  variant="outline"
+                  onClick={toggleApiKeyVisibility}
+                  title={showFullApiKey ? "Ocultar chave" : "Mostrar chave"}
+                >
+                  {showFullApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              {!apiKeyValid && (
                 <div className="flex items-center gap-2 text-yellow-600 mt-1 text-xs">
                   <AlertTriangle className="h-3 w-3" />
                   <span>A API GROQ requer uma chave válida para funcionar</span>
                 </div>
               )}
+              {apiKeyValid && (
+                <div className="flex items-center gap-2 text-green-600 mt-1 text-xs">
+                  <CheckCircle className="h-3 w-3" />
+                  <span>Chave da API configurada corretamente</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-blue-600 mt-1 text-xs">
+                <Info className="h-3 w-3" />
+                <span>Obtenha sua chave em <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="underline">console.groq.com/keys</a></span>
+              </div>
             </div>
             
             <div className="space-y-2">

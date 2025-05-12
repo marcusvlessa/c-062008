@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
+import { ApiKeyInput } from '../components/ui/api-key-input';
 import { 
   analyzeImageWithGroq, 
   enhanceImageWithGroq,
@@ -58,20 +59,22 @@ const ImageAnalysis = () => {
     };
     
     window.addEventListener('storage', handleStorageChange);
+    document.addEventListener('apiKeyUpdated', handleStorageChange);
     
     // Check periodically in case settings were updated in another tab
-    const interval = setInterval(checkApiKey, 5000);
+    const interval = setInterval(checkApiKey, 3000);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      document.removeEventListener('apiKeyUpdated', handleStorageChange);
       clearInterval(interval);
     };
   }, []);
 
   const checkApiKey = () => {
     const keyAvailable = hasValidApiKey();
-    console.log("API key check:", keyAvailable ? "Available" : "Not available");
     setApiKeyAvailable(keyAvailable);
+    console.log("API key check:", keyAvailable ? "Available" : "Not available");
   };
 
   // Check for existing analyses in the database when case changes
@@ -164,7 +167,7 @@ const ImageAnalysis = () => {
     }
     
     if (!apiKeyAvailable) {
-      toast.error('Chave da API GROQ não configurada. Por favor, configure sua chave na aba de Configurações.');
+      toast.error('Chave da API GROQ não configurada ou inválida. Por favor, configure sua chave nas Configurações.');
       return;
     }
     
@@ -417,6 +420,12 @@ const ImageAnalysis = () => {
           Aprimore imagens, execute OCR e reconhecimento facial
         </p>
       </div>
+
+      {!apiKeyAvailable && (
+        <div className="mb-6">
+          <ApiKeyInput />
+        </div>
+      )}
 
       {!currentCase ? (
         <Card className="mb-6 border-yellow-300 bg-yellow-50 dark:bg-yellow-900/30">

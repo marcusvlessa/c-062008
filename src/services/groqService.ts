@@ -22,16 +22,22 @@ const DEFAULT_GROQ_SETTINGS: GroqSettings = {
   language: 'pt'
 };
 
+// Storage key for API settings
+const STORAGE_KEY = 'securai-api-settings';
+
 // Get GROQ API settings from localStorage or use defaults
 export const getGroqSettings = (): GroqSettings => {
   try {
-    const storedSettings = localStorage.getItem('securai-api-settings');
+    const storedSettings = localStorage.getItem(STORAGE_KEY);
     if (storedSettings) {
       const parsedSettings = JSON.parse(storedSettings) as GroqSettings;
-      console.log("Retrieved API key (truncated):", 
-        parsedSettings.groqApiKey ? 
-        parsedSettings.groqApiKey.substring(0, 4) + '...' : 
-        'Not set');
+      
+      // For logging purposes only - never log the full API key
+      const truncatedKey = parsedSettings.groqApiKey ? 
+        `${parsedSettings.groqApiKey.substring(0, 4)}...` : 
+        'Not set';
+      console.log("Retrieved API key (truncated):", truncatedKey);
+      
       return parsedSettings;
     }
     return DEFAULT_GROQ_SETTINGS;
@@ -44,7 +50,15 @@ export const getGroqSettings = (): GroqSettings => {
 // Save GROQ API settings to localStorage
 export const saveGroqSettings = (settings: GroqSettings): void => {
   try {
-    localStorage.setItem('securai-api-settings', JSON.stringify({
+    // Ensure we're not replacing an existing API key with an empty one
+    if (!settings.groqApiKey && localStorage.getItem(STORAGE_KEY)) {
+      const existingSettings = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      if (existingSettings.groqApiKey) {
+        settings.groqApiKey = existingSettings.groqApiKey;
+      }
+    }
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
       ...DEFAULT_GROQ_SETTINGS,
       ...settings
     }));
@@ -71,7 +85,10 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
     }
 
     console.log(`Making GROQ API request with model: ${settings.groqModel}`);
-    console.log('Request with messages:', JSON.stringify(messages.map(m => ({role: m.role, content: m.content.substring(0, 50) + '...'})), null, 2));
+    console.log('Request with messages:', JSON.stringify(messages.map(m => ({
+      role: m.role, 
+      content: typeof m.content === 'string' ? m.content.substring(0, 50) + '...' : 'Content not string'
+    })), null, 2));
     
     const response = await fetch(settings.groqApiEndpoint, {
       method: 'POST',
