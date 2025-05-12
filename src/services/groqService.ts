@@ -145,7 +145,7 @@ export const generateInvestigationReportWithGroq = async (
     return await makeGroqAIRequest(messages, 4096);
   } catch (error) {
     console.error('Error generating investigation report:', error);
-    throw error; // Re-throw the error instead of returning a mock
+    throw error;
   }
 };
 
@@ -198,7 +198,7 @@ export const processLinkAnalysisDataWithGroq = async (
     }
   } catch (error) {
     console.error('Error processing link analysis data:', error);
-    throw error; // Re-throw the error instead of returning a mock
+    throw error;
   }
 };
 
@@ -319,7 +319,7 @@ export const transcribeAudioWithGroq = async (
     };
   } catch (error) {
     console.error('Error transcribing audio with GROQ:', error);
-    throw error; // Re-throw the error instead of returning a mock
+    throw error;
   }
 };
 
@@ -394,7 +394,7 @@ export const analyzeImageWithGroq = async (
     }
   } catch (error) {
     console.error('Error analyzing image with GROQ:', error);
-    throw error; // Re-throw the error instead of returning a mock
+    throw error;
   }
 };
 
@@ -438,7 +438,7 @@ export const enhanceImageWithGroq = async (
     };
   } catch (error) {
     console.error('Error enhancing image:', error);
-    throw error; // Re-throw the error instead of returning a mock
+    throw error;
   }
 };
 
