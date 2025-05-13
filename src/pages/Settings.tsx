@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -6,7 +7,7 @@ import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { Key, Bot, Database, HardDrive, Globe, Languages, Lock, AlertTriangle, Info } from 'lucide-react';
+import { Key, Bot, Database, HardDrive, Globe, Languages, Lock, AlertTriangle, Info, EyeOff, Eye, CheckCircle } from 'lucide-react';
 import { getGroqSettings, saveGroqSettings, GroqSettings, hasValidApiKey } from '../services/groqService';
 
 const Settings = () => {
