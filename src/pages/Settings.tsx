@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -39,6 +38,9 @@ const Settings = () => {
       displaySettings.groqApiKey = showFullApiKey 
         ? savedSettings.groqApiKey
         : `gsk_${new Array(apiKeyLength - 8).fill('•').join('')}${savedSettings.groqApiKey.slice(-4)}`;
+      
+      // Debug log
+      console.log(`API key loaded in settings, length: ${apiKeyLength}`);
     }
     
     setSettings(displaySettings);
@@ -86,7 +88,15 @@ const Settings = () => {
       const existingSettings = getGroqSettings();
       
       // If the API key looks masked, keep the existing one
-      const apiKey = settings.groqApiKey.includes('•') ? existingSettings.groqApiKey : settings.groqApiKey;
+      let apiKey = settings.groqApiKey;
+      if (settings.groqApiKey.includes('•')) {
+        apiKey = existingSettings.groqApiKey;
+        console.log('Using existing API key from settings');
+      } else {
+        // Trim the API key to remove any accidental whitespace
+        apiKey = settings.groqApiKey.trim();
+        console.log(`New API key with length: ${apiKey.length}`);
+      }
       
       // Create the settings to save
       const newSettings: GroqSettings = {

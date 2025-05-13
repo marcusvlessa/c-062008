@@ -10,12 +10,16 @@ import { Key, CheckCircle } from 'lucide-react';
 export function ApiKeyInput() {
   const [apiKey, setApiKey] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [keyLength, setKeyLength] = useState(0);
   
   // Initialize with existing API key if available
   useEffect(() => {
     const settings = getGroqSettings();
     if (settings.groqApiKey) {
+      // Mostrar apenas os primeiros caracteres para segurança
       setApiKey(settings.groqApiKey);
+      setKeyLength(settings.groqApiKey.length);
+      console.log(`API key loaded from settings, length: ${settings.groqApiKey.length}`);
     }
   }, []);
   
@@ -25,14 +29,19 @@ export function ApiKeyInput() {
       return;
     }
     
+    // Validação básica da chave GROQ
     if (!apiKey.startsWith('gsk_')) {
       toast.warning('A chave API GROQ normalmente começa com "gsk_". Verifique se ela está correta.');
     }
     
+    const cleanApiKey = apiKey.trim();
+    setKeyLength(cleanApiKey.length);
+    console.log(`Saving API key with length: ${cleanApiKey.length}`);
+    
     const settings = getGroqSettings();
     saveGroqSettings({
       ...settings,
-      groqApiKey: apiKey.trim()
+      groqApiKey: cleanApiKey
     });
     
     toast.success('Chave da API salva com sucesso');
@@ -60,17 +69,24 @@ export function ApiKeyInput() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex gap-2">
-          <Input
-            type="password"
-            placeholder="Digite sua chave da API GROQ (ex: gsk_...)"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            className="flex-1"
-          />
-          <Button onClick={handleSave} className="shrink-0">
-            {isSuccess ? <CheckCircle className="h-5 w-5" /> : "Salvar"}
-          </Button>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <Input
+              type="text" // Alterado para text para facilitar a depuração
+              placeholder="Digite sua chave da API GROQ (ex: gsk_...)"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="flex-1"
+            />
+            <Button onClick={handleSave} className="shrink-0">
+              {isSuccess ? <CheckCircle className="h-5 w-5" /> : "Salvar"}
+            </Button>
+          </div>
+          {keyLength > 0 && (
+            <div className="text-xs text-green-600 dark:text-green-400">
+              Chave com {keyLength} caracteres detectada
+            </div>
+          )}
         </div>
       </CardContent>
       <CardFooter className="text-xs text-gray-500">

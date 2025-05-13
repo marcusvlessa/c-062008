@@ -55,11 +55,23 @@ export const saveGroqSettings = (settings: GroqSettings): void => {
       }
     }
     
+    // Remover qualquer espaço em branco da chave da API
+    if (settings.groqApiKey) {
+      settings.groqApiKey = settings.groqApiKey.trim();
+    }
+    
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       ...DEFAULT_GROQ_SETTINGS,
       ...settings
     }));
     console.log('GROQ settings saved successfully');
+    
+    // Adicionar log para depuração
+    const storedSettings = getGroqSettings();
+    if (storedSettings.groqApiKey) {
+      console.log(`API key stored, starts with: ${storedSettings.groqApiKey.substring(0, 4)}`);
+      console.log(`API key length: ${storedSettings.groqApiKey.length}`);
+    }
   } catch (error) {
     console.error('Error saving GROQ settings:', error);
   }
@@ -87,6 +99,9 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
       content: typeof m.content === 'string' ? m.content.substring(0, 50) + '...' : 'Content not string'
     })), null, 2));
     
+    // Adicionar log para depuração da chave
+    console.log(`Using API key that starts with: ${settings.groqApiKey.substring(0, 4)} and has length: ${settings.groqApiKey.length}`);
+    
     const response = await fetch(settings.groqApiEndpoint, {
       method: 'POST',
       headers: {
@@ -104,6 +119,8 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
     if (!response.ok) {
       const errorText = await response.text();
       console.error('GROQ API error response:', errorText);
+      console.error('Response status:', response.status, response.statusText);
+      
       let errorData;
       try {
         errorData = JSON.parse(errorText);
