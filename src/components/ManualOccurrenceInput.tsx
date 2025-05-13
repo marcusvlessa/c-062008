@@ -36,13 +36,20 @@ const ManualOccurrenceInput = ({
       checkApiKey();
     };
     
-    window.addEventListener('storage', handleStorageChange);
+    // Also listen for custom event when API key is updated
+    const handleApiKeyUpdate = () => {
+      checkApiKey();
+    };
     
-    // Check periodically (every 5 seconds) in case settings were updated in another tab
+    window.addEventListener('storage', handleStorageChange);
+    document.addEventListener('apiKeyUpdated', handleApiKeyUpdate);
+    
+    // Check periodically (every 5 seconds) in case settings were updated
     const interval = setInterval(checkApiKey, 5000);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      document.removeEventListener('apiKeyUpdated', handleApiKeyUpdate);
       clearInterval(interval);
     };
   }, []);

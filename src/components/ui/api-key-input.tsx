@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from './input';
 import { Button } from './button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './card';
@@ -11,6 +11,14 @@ export function ApiKeyInput() {
   const [apiKey, setApiKey] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
   
+  // Initialize with existing API key if available
+  useEffect(() => {
+    const settings = getGroqSettings();
+    if (settings.groqApiKey) {
+      setApiKey(settings.groqApiKey);
+    }
+  }, []);
+  
   const handleSave = () => {
     if (!apiKey.trim()) {
       toast.error('Por favor, insira uma chave de API válida');
@@ -18,7 +26,7 @@ export function ApiKeyInput() {
     }
     
     if (!apiKey.startsWith('gsk_')) {
-      toast.warning('A chave API GROQ geralmente começa com "gsk_". Verifique se ela está correta.');
+      toast.warning('A chave API GROQ normalmente começa com "gsk_". Verifique se ela está correta.');
     }
     
     const settings = getGroqSettings();
@@ -29,6 +37,12 @@ export function ApiKeyInput() {
     
     toast.success('Chave da API salva com sucesso');
     setIsSuccess(true);
+    
+    // Test API key by dispatching a custom event
+    document.dispatchEvent(new Event('apiKeyUpdated'));
+    
+    // Also trigger a storage event to notify other components
+    window.dispatchEvent(new Event('storage'));
     
     // Reset success indicator after 3 seconds
     setTimeout(() => setIsSuccess(false), 3000);

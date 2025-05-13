@@ -33,10 +33,7 @@ export const getGroqSettings = (): GroqSettings => {
       const parsedSettings = JSON.parse(storedSettings) as GroqSettings;
       
       // For logging purposes only - never log the full API key
-      const truncatedKey = parsedSettings.groqApiKey ? 
-        `${parsedSettings.groqApiKey.substring(0, 4)}...` : 
-        'Not set';
-      console.log("Retrieved API key (truncated):", truncatedKey);
+      console.log("Retrieved API key (truncated): gsk_...");
       
       return parsedSettings;
     }
